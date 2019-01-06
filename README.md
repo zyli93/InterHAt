@@ -14,3 +14,16 @@ It combines Factorization Machine (FM) and Graph Convolutional Network (GCN).
 Till now, the repo is private due to confidentiality purpose. 
 It will be made public when the paper is published.
 
+
+### Dependencies
+```
+networkx
+pickle
+sklearn
+```
+
+### Run
+
+#### Building networkx object
+
+
