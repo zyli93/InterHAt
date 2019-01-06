@@ -140,6 +140,7 @@ class InterprecsysBase:
         # ports to the outside
         self.loss, self.mean_loss = None, None
         self.predict, self.global_step = None, None
+        self.acc = None
 
         # operations
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate,
@@ -228,35 +229,38 @@ class InterprecsysBase:
 
         self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
 
-        if self.label is None:
-            half_size = self.batch_size / 2
-            pseudo_label = tf.constant([1] * half_size + [0] * half_size)  # create pseudo_label w/ half 1 and half 0
-            self.acc, _ = tf.metrics.accuracy(labels=pseudo_label, predictions=self.predict)
-        else:
-            self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
+        with tf.name_scope("Accuracy"):
+            if self.label is None:
+                half_size = self.batch_size / 2
+                pseudo_label = tf.constant([1] * half_size + [0] * half_size)  # create pseudo_label w/ half 1 and half 0
+                self.acc, _ = tf.metrics.accuracy(labels=pseudo_label, predictions=self.predict)
+            else:
+                self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
+            tf.summary.scalar("Accuracy", self.acc)
+
+        # ===== ADD OTHER METRICS HERE =====
 
         if self.is_training:
 
             """
-            if label is set:
-              cross entropy loss
-            else:
-              upper half to be positive and lower half to be negative, use hinge loss
+            if label is set: cross entropy loss
+            else: upper half positive and lower half negative, use subtract
             """
+            regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
             if self.label is None:
                 pos_label, neg_label = tf.split(2, tf.sigmoid(logits), axis=0)
-                self.loss = tf.subtract(neg_label, pos_label, name="training_loss_no_label")
+                self.loss = tf.subtract(neg_label, pos_label, name="training_loss_no_label") \
+                            + regularization_loss
                 self.mean_loss = tf.divide(self.loss, self.batch_size/2, name="mean_loss_no_label")
             else:
                 self.loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.label,
                                                                     logits=logits,
-                                                                    name="training_loss_label")
+                                                                    name="training_loss_label") \
+                            + regularization_loss
                 self.mean_loss = tf.divide(self.loss, self.batch_size, name="mean_loss_label")
 
-            regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-            self.mean_loss = self.mean_loss + regularization_loss
-            tf.summary.scalar("mean_loss", self.mean_loss)
+            tf.summary.scalar("Mean_Loss", self.mean_loss)
 
             self.global_step = tf.Variable(0, name="global_step", trainable=False)
             self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)

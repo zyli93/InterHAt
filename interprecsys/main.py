@@ -63,6 +63,12 @@ def run_model(data_loader,
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
 
+    """
+    available outcomes:
+        - predict
+        - accuracy
+        - loss
+    """
     for epoch in range(epochs):
         data_loader.has_next = True
         while data_loader.has_next:
