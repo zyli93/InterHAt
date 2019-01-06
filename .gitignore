@@ -182,3 +182,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# other repo
+useful_repo/
