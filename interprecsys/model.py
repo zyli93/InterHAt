@@ -8,9 +8,9 @@ This is a complex hybrid model of "Attentive Factorization Machine and Graph Att
 
 import tensorflow as tf
 
-from .const import Constant
-from .modules import multihead_attention, feedforward, embedding
-from .module2 import single_attention
+from const import Constant
+from modules import multihead_attention, feedforward, embedding
+from module2 import single_attention
 
 
 class Interprecsys:
@@ -111,7 +111,6 @@ class InterprecsysBase:
                  , regularization_weight
                  , random_seed=Constant.RANDOM_SEED
                  , scale_embedding=False
-                 , is_training=True
                  ):
         # config parameters
         self.embedding_dim = embedding_dim  # the C
@@ -127,7 +126,6 @@ class InterprecsysBase:
 
         # training parameters
         self.learning_rate = learning_rate
-        self.is_training = is_training
         self.batch_size = batch_size
 
         # variables [None]
@@ -136,19 +134,21 @@ class InterprecsysBase:
 
         # placeholders
         self.X_ind, self.X_val, self.label = None, None, None
+        self.is_training = None
 
         # ports to the outside
         self.loss, self.mean_loss = None, None
-        self.predict, self.global_step = None, None
-        self.acc = None
+        self.predict, self.acc = None, None
+
+        # global training steps
+        self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
         # operations
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate,
                                                 beta1=0.9,
                                                 beta2=0.98,
                                                 epsilon=1e-8)
-        self.train_op = None
-        self.merged = None
+        self.train_op, self.merged = None, None
 
         self.build_graph()
 
@@ -158,7 +158,8 @@ class InterprecsysBase:
         with tf.name_scope("input_ph"):
             self.X_ind = tf.placeholder(dtype=tf.int32, shape=[None, self.field_size], name="X_index")
             self.X_val = tf.placeholder(dtype=tf.float32, shape=[None, self.field_size], name="X_value")
-            self.label = tf.placeholder(dtype=tf.int32, shape=None, name="label")
+            self.label = tf.placeholder(dtype=tf.float32, shape=None, name="label")
+            self.is_training = tf.placeholder(dtype=tf.bool, shape=(), name="is_training")
 
         # lookup and process embedding
         with tf.name_scope("embedding"):
@@ -178,7 +179,7 @@ class InterprecsysBase:
         with tf.name_scope("dropout"):
             features = tf.layers.dropout(features,
                                          rate=self.dropout_rate,
-                                         training=tf.convert_to_tensor(self.is_training))
+                                         training=self.is_training)
 
         # multi-layer, multi-head attention
         with tf.name_scope("multilayer_attn"):
@@ -187,52 +188,61 @@ class InterprecsysBase:
                     # Multihead Attention
                     features = multihead_attention(queries=features,
                                                    keys=features,
-                                                   num_units=self.feat_size,
+                                                   num_units=self.embedding_dim,
                                                    num_heads=self.num_head,
                                                    dropout_rate=self.dropout_rate,
                                                    causality=False,
-                                                   is_training=tf.convert_to_tensor(self.is_training))
+                                                   is_training=self.is_training)
 
                     # Feed Forward
                     features = feedforward(inputs=features,
-                                           num_units=[4 * self.feat_size, self.feat_size],
-                                           scope=scope)
+                                           num_units=[4 * self.embedding_dim, self.embedding_dim],
+                                           scope=scope)  # (N, T, C)
 
         # build second order cross
-        # [NOTE]: could be other functions
+        # TODO: could be other functions
         # TODO: find out difference between name_scope and variable_scope
-        with tf.name_scope("sec_order_cross"):
-            with tf.variable_scope("sec_order_cross") as scope:
-                second_cross = tf.layers.conv1d(inputs=features,
-                                                filters=1, kernel_size=1,
-                                                activation=tf.nn.relu, use_bias=True)  # (N, C)
+        # TODO: some of var names are `over-scoped`.
+            # with tf.name_scope("sec_order_cross"):
 
-                third_cross = single_attention(Q=second_cross, K=self.emb, V=self.emb,
-                                               scope=scope,
-                                               reuse=True,
-                                               regularize=True,)  # (N, C)
+        with tf.variable_scope("sec_order_cross") as scope:
+            second_cross = tf.layers.conv1d(inputs=tf.transpose(features, [0, 2, 1]),  # transpose: (N, C, T)
+                                            filters=1,
+                                            kernel_size=1,
+                                            activation=tf.nn.relu,
+                                            use_bias=True)  # (N, C, 1)
+            second_cross = tf.transpose(second_cross, [0, 2, 1])  # (N, 1, C)
+
+            third_cross = single_attention(queries=second_cross,
+                                           keys=self.emb,
+                                           values=self.emb,
+                                           scope=scope,
+                                           regularize=True)  # (N, 1, C)
 
         with tf.name_scope("combined_features"):
             # concatenate enc, second_cross, and third_cross
-            all_features = tf.concat([self.emb,
-                                      tf.expand_dims(second_cross, axis=1),
-                                      tf.expand_dims(third_cross, axis=1)],
+            all_features = tf.concat([self.emb, second_cross, third_cross],
                                      axis=1,
                                      name="combined_features")  # (N, (T+2), C)
 
             # TODO: other options of condensing information
             all_features = tf.layers.conv1d(inputs=all_features,
-                                            filters=1, kernel_size=1,
-                                            activation=tf.nn.relu, use_bias=True)  # (N, (T+2))
+                                            filters=1,
+                                            kernel_size=1,
+                                            activation=tf.nn.relu,
+                                            use_bias=True)  # (N, (T+2), 1)
 
-            logits = tf.layers.dense(inputs=all_features, units=1, activation=tf.nn.relu)
+            all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
+            logits = tf.squeeze(tf.layers.dense(inputs=all_features,
+                                                units=1,
+                                                activation=tf.nn.relu), axis=1)  # N
 
         self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
 
         with tf.name_scope("Accuracy"):
             if self.label is None:
                 half_size = self.batch_size / 2
-                pseudo_label = tf.constant([1] * half_size + [0] * half_size)  # create pseudo_label w/ half 1 and half 0
+                pseudo_label = tf.constant([1.0] * half_size + [0.0] * half_size)  # half 1 & half 0
                 self.acc, _ = tf.metrics.accuracy(labels=pseudo_label, predictions=self.predict)
             else:
                 self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
@@ -240,31 +250,40 @@ class InterprecsysBase:
 
         # ===== ADD OTHER METRICS HERE =====
 
-        if self.is_training:
+        """
+        if label is set: cross entropy loss
+        else: upper half positive and lower half negative, use subtract
+        """
+        regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-            """
-            if label is set: cross entropy loss
-            else: upper half positive and lower half negative, use subtract
-            """
-            regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+        if self.label is None:
+            pos_label, neg_label = tf.split(2, tf.sigmoid(logits), axis=0)
+            self.loss = tf.add(
+                tf.reduce_sum(
+                    tf.subtract(neg_label, pos_label, name="training_loss_nolabel")),
+                regularization_loss,
+                name="training_loss_nolabel_reg"
+            )
+            self.mean_loss = tf.divide(self.loss,
+                                       tf.to_float(self.batch_size/2),
+                                       name="mean_loss_nolabel_reg")
+        else:
+            self.loss = tf.add(
+                tf.reduce_sum(
+                    tf.nn.sigmoid_cross_entropy_with_logits(
+                        labels=self.label,
+                        logits=logits,
+                        name="training_loss_label")),
+                regularization_loss,
+                name="training_loss_label_reg"
+            )
 
-            if self.label is None:
-                pos_label, neg_label = tf.split(2, tf.sigmoid(logits), axis=0)
-                self.loss = tf.subtract(neg_label, pos_label, name="training_loss_no_label") \
-                            + regularization_loss
-                self.mean_loss = tf.divide(self.loss, self.batch_size/2, name="mean_loss_no_label")
-            else:
-                self.loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.label,
-                                                                    logits=logits,
-                                                                    name="training_loss_label") \
-                            + regularization_loss
-                self.mean_loss = tf.divide(self.loss, self.batch_size, name="mean_loss_label")
+            self.mean_loss = tf.divide(self.loss,
+                                       tf.to_float(self.batch_size),
+                                       name="mean_loss_label_reg")
 
             tf.summary.scalar("Mean_Loss", self.mean_loss)
 
-            self.global_step = tf.Variable(0, name="global_step", trainable=False)
             self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)
             self.merged = tf.summary.merge_all()  # TODO: other metrics outside model
-
-
 

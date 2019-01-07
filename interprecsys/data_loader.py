@@ -11,8 +11,8 @@ from itertools import product
 import numpy as np
 import pandas as pd
 
-from .build_entity_graph import load_graph, load_dict, load_nbr_dict
-from .const import Constant, Config
+from build_entity_graph import load_graph, load_dict, load_nbr_dict
+from const import Constant, Config
 
 
 DATA_DIR = Constant.PARSE_DIR  # TODO: manage folder tree
@@ -34,6 +34,7 @@ class DataLoader:
         # ==== params =====
         self.use_graph = use_graph
         self.dataset = dataset
+        self.cfg = Config(dataset=dataset)
 
         self.batch_size = batch_size
 
@@ -50,7 +51,8 @@ class DataLoader:
 
         # ===== create feature dictionary =====
         self.feat_dict = FeatureDictionary(df_train=self.df_train,
-                                           df_test=self.df_test)
+                                           df_test=self.df_test,
+                                           cfg=self.cfg)
 
         self.X_train_ind, self.X_train_val, self.y_train = \
             self.parse(df=self.df_train, has_label=True)
@@ -63,7 +65,6 @@ class DataLoader:
         self.trainset_size = len(self.X_train_ind[1])
 
         # version with GraphSAGE (complex)
-        # TODO: cannot connect to read csv file
         if self.use_graph:
 
             self.cus_G = load_graph(dataset, entity_graph_threshold, is_cus=True)  # 1 for cus
@@ -75,10 +76,11 @@ class DataLoader:
             self.obj_nbr = load_nbr_dict(dataset, entity_graph_threshold, is_cus=False)
 
             """
-            TODO: here's a problem. what exactly do graph-version need for input. Is it all raw features?
-            Or just column from embedding matrix.
+            TODO: here's a problem. 
+                what exactly do graph-version need for input. 
+                Is it all raw features?
+                Or just column from embedding matrix.
             """
-
 
     def generate_train_batch(self):
         """
@@ -93,10 +95,12 @@ class DataLoader:
         if (bi + 1) * bs < self.trainset_size:
             batch_ind = self.X_train_ind[bi * bs: (bi + 1) * bs]
             batch_val = self.X_train_val[bi * bs: (bi + 1) * bs]
+            batch_label = self.y_train[bi * bs: (bi + 1) * bs]
             self.batch_index += 1
         else:
             batch_ind = self.X_train_ind[bi * bs:]
             batch_val = self.X_train_val[bi * bs:]
+            batch_label = self.y_train[bi * bs:]
             self.batch_index = 0
             self.has_next = False
             self._shuffle_data(is_train=True)
@@ -104,7 +108,7 @@ class DataLoader:
         if self.use_graph:
             raise NotImplementedError
         else:
-            return batch_ind, batch_val
+            return batch_ind, batch_val, batch_label
 
     def generate_test_batch(self):
         """
@@ -135,8 +139,8 @@ class DataLoader:
         load mixed train and test data
         """
 
-        df_train = pd.read_csv(Config.TRAIN_FILE)
-        df_test = pd.read_csv(Config.TEST_FILE)
+        df_train = pd.read_csv(self.cfg.TRAIN_FILE)
+        df_test = pd.read_csv(self.cfg.TEST_FILE)
 
         # process missing feature
         cols = [c for c in df_train.columns if c not in ['id', 'target']]
@@ -151,7 +155,7 @@ class DataLoader:
         X_test = df_test[cols].values
         ids_test = df_test['id'].values
 
-        cat_feat_idx = [i for i, c in enumerate(cols) if c in Config.CAT_COL]
+        cat_feat_idx = [i for i, c in enumerate(cols) if c in self.cfg.CAT_COL]
 
         return df_train, df_test, X_train, y_train, X_test, ids_test, cat_feat_idx
 
@@ -175,11 +179,11 @@ class DataLoader:
         dfv = dfi.copy()
         for col in dfi.columns:
 
-            if col in Config.IGN_COL:
+            if col in self.cfg.IGN_COL:
                 dfi.drop(col, axis=1, inplace=True)
                 dfv.drop(col, axis=1, inplace=True)
 
-            elif col in Config.NUM_COL:
+            elif col in self.cfg.NUM_COL:
                 # for numeric feature columns, leave dfv[col] == dfi[col]
                 dfi[col] = self.feat_dict.feat_dict[col]
 
@@ -206,10 +210,12 @@ class DataLoader:
 class FeatureDictionary(object):
     def __init__(self,
                  df_train,
-                 df_test):
+                 df_test,
+                 cfg):
 
         self.dfTrain = df_train
         self.dfTest = df_test
+        self.cfg = cfg
 
         self.feat_dim = 0
         self.feat_dict = {}
@@ -228,12 +234,12 @@ class FeatureDictionary(object):
                  then feat_dict[num] = 10
         """
 
-        df = pd.concat([self.dfTrain, self.dfTest])
+        df = pd.concat([self.dfTrain, self.dfTest], sort=False)
         tc = 0
         for col in df.columns:
-            if col in Config.IGN_COL:
+            if col in self.cfg.IGN_COL:
                 continue
-            elif col in Config.NUM_COL:
+            elif col in self.cfg.NUM_COL:
                 self.feat_dict[col] = tc
                 tc += 1
             else:

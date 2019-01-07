@@ -185,3 +185,5 @@ dmypy.json
 
 # other repo
 useful_repo/
+data/
+log/

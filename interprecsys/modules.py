@@ -10,8 +10,8 @@ from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 
-def normalize(inputs, 
-              epsilon = 1e-8,
+def normalize(inputs,
+              epsilon=1e-8,
               scope="ln",
               reuse=None):
     '''Applies layer normalization.
@@ -32,7 +32,7 @@ def normalize(inputs,
         params_shape = inputs_shape[-1:]
     
         mean, variance = tf.nn.moments(inputs, [-1], keep_dims=True)
-        beta= tf.Variable(tf.zeros(params_shape))
+        beta = tf.Variable(tf.zeros(params_shape))
         gamma = tf.Variable(tf.ones(params_shape))
         normalized = (inputs - mean) / ( (variance + epsilon) ** (.5) )
         outputs = gamma * normalized + beta
@@ -199,17 +199,18 @@ def multihead_attention(queries,
             num_units = queries.get_shape().as_list[-1]
         
         # Linear projections
-        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu) # (N, T_q, C)
-        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu) # (N, T_k, C)
-        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu) # (N, T_k, C)
+        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu)  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
         
         # Split and concat
-        Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0) # (h*N, T_q, C/h) 
-        K_ = tf.concat(tf.split(K, num_heads, axis=2), axis=0) # (h*N, T_k, C/h) 
-        V_ = tf.concat(tf.split(V, num_heads, axis=2), axis=0) # (h*N, T_k, C/h) 
+        print("Q shape", Q.get_shape().as_list)
+        Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
+        K_ = tf.concat(tf.split(K, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
+        V_ = tf.concat(tf.split(V, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
 
         # Multiplication
-        outputs = tf.matmul(Q_, tf.transpose(K_, [0, 2, 1])) # (h*N, T_q, T_k)
+        outputs = tf.matmul(Q_, tf.transpose(K_, [0, 2, 1]))  # (h*N, T_q, T_k)
         
         # Scale
         outputs = outputs / (K_.get_shape().as_list()[-1] ** 0.5)

@@ -18,8 +18,8 @@ import sys
 from itertools import combinations
 import pickle
 
-from .const import Constant
-from .utils import entity_similarity
+from const import Constant
+from utils import entity_similarity
 
 
 def _load_pickle(path):

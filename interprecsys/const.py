@@ -22,38 +22,51 @@ class Constant(object):
 
     GRAPH_DIR = os.getcwd() + "/data/graph/"
     RAW_DIR = os.getcwd() + "/data/raw/"
-    PARSE_DIR = os.getcwd() + "./data/parse/"
+    PARSE_DIR = os.getcwd() + "/data/parse/"
+    LOG_DIR = os.getcwd() + "/log/"
 
     RANDOM_SEED = 723
 
 
-class Config(object):
-    """
-    Specific information for Dataset A
-    """
+class Config:
+    def __init__(self, dataset):
+        self.dataset = dataset
 
-    dataset = "a_dataset"
+        self.TRAIN_FILE = Constant.PARSE_DIR + dataset + "/train.csv"
+        self.TEST_FILE = Constant.PARSE_DIR + dataset + "/test.csv"
+        self.CUS_FILE = Constant.PARSE_DIR + dataset + "/cus.csv"
+        self.OBJ_FILE = Constant.PARSE_DIR + dataset + "/obj.csv"
 
-    TRAIN_FILE = Constant.PARSE_DIR + dataset + "/xxx_train.csv"
-    TEST_FILE = Constant.PARSE_DIR + dataset + "/xxx_test.csv"
-    CUS_FILE = Constant.PARSE_DIR + dataset + "/xxx_cus.csv"
-    OBJ_FILE = Constant.PARSE_DIR + dataset + "/xxx_obj.csv"
+        # Columns of categorical features
+        if self.dataset == "toy":
+            self.CAT_COL = [
+                'ps_ind_02_cat', 'ps_ind_04_cat', 'ps_ind_05_cat',
+                'ps_car_01_cat', 'ps_car_02_cat', 'ps_car_03_cat',
+                'ps_car_04_cat', 'ps_car_05_cat', 'ps_car_06_cat',
+                'ps_car_07_cat', 'ps_car_08_cat', 'ps_car_09_cat',
+                'ps_car_10_cat', 'ps_car_11_cat',
+            ]
 
+            self.NUM_COL = [
+                # # binary
+                # "ps_ind_06_bin", "ps_ind_07_bin", "ps_ind_08_bin",
+                # "ps_ind_09_bin", "ps_ind_10_bin", "ps_ind_11_bin",
+                # "ps_ind_12_bin", "ps_ind_13_bin", "ps_ind_16_bin",
+                # "ps_ind_17_bin", "ps_ind_18_bin",
+                # "ps_calc_15_bin", "ps_calc_16_bin", "ps_calc_17_bin",
+                # "ps_calc_18_bin", "ps_calc_19_bin", "ps_calc_20_bin",
+                # numeric
+                "ps_reg_01", "ps_reg_02", "ps_reg_03",
+                "ps_car_12", "ps_car_13", "ps_car_14", "ps_car_15",
+            ]
 
-    # Columns of categorical features
-    CAT_COL = [
-        "col_1",
-        "col_2"
-    ]
+            self.IGN_COL = [
+                "id", "target",
+                "ps_calc_01", "ps_calc_02", "ps_calc_03", "ps_calc_04",
+                "ps_calc_05", "ps_calc_06", "ps_calc_07", "ps_calc_08",
+                "ps_calc_09", "ps_calc_10", "ps_calc_11", "ps_calc_12",
+                "ps_calc_13", "ps_calc_14",
+                "ps_calc_15_bin", "ps_calc_16_bin", "ps_calc_17_bin",
+                "ps_calc_18_bin", "ps_calc_19_bin", "ps_calc_20_bin"
+            ]
 
-    # Columns of numeric features
-    NUM_COL = [
-        "num_1",
-        "num_2"
-    ]
-
-    # Columns to be ignored
-    IGN_COL = [
-        "ign_1",
-        "ign_2"
-    ]
