@@ -1,11 +1,15 @@
 """
 Util functions
 """
+import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from sklearn.metrics import jaccard_similarity_score
+
+from const import Constant
 
 
 # ===== Entity Similarity Measurement =====
@@ -59,3 +63,17 @@ def plot_fig(train_results, valid_results, model_name):
     plt.legend(legends)
     plt.savefig("fig/%s.png" % model_name)
     plt.close()
+
+
+def create_folder_tree(dataset):
+    for x in [
+        Constant.DATA_DIR,
+        Constant.GRAPH_DIR,
+        Constant.RAW_DIR,
+        Constant.PARSE_DIR,
+        Constant.LOG_DIR,
+        Constant.PARSE_DIR + "/{}".format(dataset)
+    ]:
+        if not os.path.isdir(x):
+            os.mkdir(x)
+

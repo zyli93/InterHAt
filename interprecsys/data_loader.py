@@ -14,8 +14,7 @@ import pandas as pd
 from build_entity_graph import load_graph, load_dict, load_nbr_dict
 from const import Constant, Config
 
-
-DATA_DIR = Constant.PARSE_DIR  # TODO: manage folder tree
+DATA_DIR = Constant.PARSE_DIR
 
 
 class DataLoader:
@@ -55,9 +54,9 @@ class DataLoader:
                                            cfg=self.cfg)
 
         self.X_train_ind, self.X_train_val, self.y_train = \
-            self.parse(df=self.df_train, has_label=True)
+            self.feat_dict.parse(df=self.df_train, has_label=True)
         self.X_test_ind, self.X_test_val, self.ids_test = \
-            self.parse(df=self.df_train)
+            self.feat_dict.parse(df=self.df_train)
 
         self.feature_size = self.feat_dict.feat_dim
         self.field_size = len(self.X_train_ind[0])
@@ -113,6 +112,7 @@ class DataLoader:
     def generate_test_batch(self):
         """
         TODO: simple version for now.
+        TODO: what is ids?
         """
         return self.X_test_ind, self.X_test_val, self.ids_test
 
@@ -159,7 +159,56 @@ class DataLoader:
 
         return df_train, df_test, X_train, y_train, X_test, ids_test, cat_feat_idx
 
+
+# Feature Dictionary of click through
+class FeatureDictionary(object):
+    def __init__(self,
+                 df_train,
+                 df_test,
+                 df_val,
+                 cfg):
+
+        self.dfTrain = df_train
+        self.dfTest = df_test
+        self.dfVal = df_val
+        self.cfg = cfg
+
+        self.feat_dim = 0
+        self.feat_dict = {}
+
+        self.gen_feat_dict()
+
+    def gen_feat_dict(self):
+        """
+        generate feature dictionary
+
+        for categorical feature, do one-hot encoding
+            e.g. if col[cat].unique() = 'x', 'y', 'z', tc = 3
+                 then feat_dict[cat] = { 'x': 3, 'y': 4, 'z': 5}
+        for numeric feature, do
+            e.g. if col[num] = 1.4, tc = 10
+                 then feat_dict[num] = 10
+        """
+
+        df = pd.concat([self.dfTrain, self.dfTest, self.dfVal], sort=False)
+        tc = 0
+        for col in df.columns:
+            if col in self.cfg.IGN_COL:
+                continue
+            elif col in self.cfg.NUM_COL:
+                self.feat_dict[col] = tc
+                tc += 1
+            else:
+                us = df[col].unique()
+                self.feat_dict[col] = dict(zip(us, range(tc, len(us) + tc)))
+                tc += len(us)
+
+        self.feat_dim = tc
+
     def parse(self, df=None, has_label=False):
+
+        if not self.feat_dict:
+            raise ValueError("feat_dict is empty!!")
 
         dfi = df.copy()
 
@@ -185,10 +234,10 @@ class DataLoader:
 
             elif col in self.cfg.NUM_COL:
                 # for numeric feature columns, leave dfv[col] == dfi[col]
-                dfi[col] = self.feat_dict.feat_dict[col]
+                dfi[col] = self.feat_dict[col]
 
             else:
-                dfi[col] = dfi[col].map(self.feat_dict.feat_dict[col])
+                dfi[col] = dfi[col].map(self.feat_dict[col])
                 # `map` the cat feature to an id
                 dfv[col] = 1.
 
@@ -205,46 +254,3 @@ class DataLoader:
         else:  # test
             return xi, xv, ids
 
-
-# Feature Dictionary of click through
-class FeatureDictionary(object):
-    def __init__(self,
-                 df_train,
-                 df_test,
-                 cfg):
-
-        self.dfTrain = df_train
-        self.dfTest = df_test
-        self.cfg = cfg
-
-        self.feat_dim = 0
-        self.feat_dict = {}
-
-        self.gen_feat_dict()
-
-    def gen_feat_dict(self):
-        """
-        generate feature dictionary
-
-        for categorical feature, do one-hot encoding
-            e.g. if col[cat].unique() = 'x', 'y', 'z', tc = 3
-                 then feat_dict[cat] = { 'x': 3, 'y': 4, 'z': 5}
-        for numeric feature, do
-            e.g. if col[num] = 1.4, tc = 10
-                 then feat_dict[num] = 10
-        """
-
-        df = pd.concat([self.dfTrain, self.dfTest], sort=False)
-        tc = 0
-        for col in df.columns:
-            if col in self.cfg.IGN_COL:
-                continue
-            elif col in self.cfg.NUM_COL:
-                self.feat_dict[col] = tc
-                tc += 1
-            else:
-                us = df[col].unique()
-                self.feat_dict[col] = dict(zip(us, range(tc, len(us) + tc)))
-                tc += len(us)
-
-        self.feat_dim = tc

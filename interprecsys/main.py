@@ -5,6 +5,7 @@ from data_loader import DataLoader
 from const import Constant
 
 from model import Interprecsys, InterprecsysBase
+from utils import create_folder_tree
 
 flags = tf.app.flags
 
@@ -52,6 +53,7 @@ def run_model(data_loader,
               model,
               epochs=None,
               load_recent=False):
+    # TODO: add load_recent
     """
     Run model (fit/predict)
     
@@ -66,9 +68,12 @@ def run_model(data_loader,
     saver = tf.train.Saver(max_to_keep=10)
 
     # ===== Configurations of runtime environment =====
-    config = tf.ConfigProto()
-    # config.gpu_options.allow_growth = True
-    # TODO: add more configuration
+    config = tf.ConfigProto(
+        allow_soft_placement=True,
+        log_device_placement=True
+    )
+    config.gpu_options.allow_growth = True
+    config.gpu_options.per_process_gpu_memory_fraction = 0.8
 
     # ===== Run Everything =====
     """
@@ -80,7 +85,7 @@ def run_model(data_loader,
     # set dir for runtime log
     log_dir = os.path.join(Constant.LOG_DIR, FLAGS.dataset, "train")
 
-    with tf.Session(config) as sess:
+    with tf.Session(config=config) as sess:
 
         # training
         # ===== Initialization of params =====
@@ -130,6 +135,9 @@ def run_model(data_loader,
 
 def run_evaluation(data_loader,
                    model):
+
+    # TODO: AUC and LogLoss
+
     # ===== Saver for saving & loading =====
     saver = tf.train.Saver(max_to_keep=10)
 
@@ -139,12 +147,6 @@ def run_evaluation(data_loader,
     # TODO: add more configuration
 
     # ===== Run Everything =====
-    """
-    available outcomes:
-        - predict
-        - accuracy
-        - loss
-    """
     # TODO: do we need test_writer?
     # set dir for runtime log
     log_suffix = "test"
@@ -172,10 +174,13 @@ def run_evaluation(data_loader,
         )
 
         # TODO: further evaluation steps!
-        # TODO: print out evaluation results.
+        # TODO: print out evaluation results, maybe to file
 
 
 def main(argv):
+
+    create_folder_tree(FLAGS.dataset)
+
     dl = DataLoader(dataset=FLAGS.dataset,
                     use_graph=FLAGS.use_graph,
                     entity_graph_threshold=FLAGS.entity_graph_threshold,
@@ -207,4 +212,3 @@ def main(argv):
 
 if __name__ == '__main__':
     tf.app.run()
-

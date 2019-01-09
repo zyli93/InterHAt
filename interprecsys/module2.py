@@ -35,7 +35,7 @@ def single_attention(queries,
         # W: T * C
         W = tf.get_variable(name="single_attn_weight",
                             dtype=tf.float32,
-                            shape=(T*C),
+                            shape=(T * C),
                             initializer=initializer,
                             regularizer=regularizer)  # TODO: good initializer
 
@@ -57,25 +57,25 @@ def single_attention(queries,
         # a_i = h^T RELU(W outer(Q, K[i]) + b)
 
         # compute attention factor: outer(Q, K[i])
-        # _outer = tf.multiply(keys, tf.reshape(queries, shape=[1, 1, C]))  # (N, T, C)
-        # _outer = tf.multiply(keys, queries)  # (N, T, C)
-        _outer = tf.reshape(tf.multiply(keys, queries), shape=[-1, T * C])  # (N, T * C)
+        # kq_outer = tf.multiply(keys, tf.reshape(queries, shape=[1, 1, C]))  # (N, T, C)
+        # kq_outer = tf.multiply(keys, queries)  # (N, T, C)
+        kq_outer = tf.reshape(tf.multiply(keys, queries), shape=[-1, T * C])  # (N, T * C)
 
         # RELU(W outer(Q, k[i]) + b)
-        # _activ = tf.nn.relu(tf.matmul(_outer, W)) + tf.reshape(b, (1, 1, -1))  # (N, T, C)
-        _activ = tf.nn.relu(
-            tf.reshape(tf.multiply(_outer, W), [-1, T, C])  # (N, T, C)
+        # lin_activ = tf.nn.relu(tf.matmul(kq_outer, W)) + tf.reshape(b, (1, 1, -1))  # (N, T, C)
+        lin_activ = tf.nn.relu(
+            tf.reshape(tf.multiply(kq_outer, W), [-1, T, C])  # (N, T, C)
             + tf.reshape(b, (1, 1, -1))  # (1, 1, C)
         )   # (N, T, C)
 
         # h^T RELU(W outer(Q, k[i]) + b)
         h_ = tf.reshape(h, shape=[1, 1, C])
-        attention_factor = tf.reduce_sum(tf.multiply(_activ, h_), axis=-1)  # (N, T)
+        attention_factor = tf.reduce_sum(tf.multiply(lin_activ, h_), axis=-1)  # (N, T)
 
         attention_factor = tf.expand_dims(attention_factor, axis=1)  # (N, T) to (N, 1, T)
-        weighted_V = tf.matmul(attention_factor, values)
+        weighted_value = tf.matmul(attention_factor, values)
 
-    return weighted_V
+    return weighted_value
 
 
 
