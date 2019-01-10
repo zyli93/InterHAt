@@ -38,6 +38,7 @@ class Config:
         self.OBJ_FILE = Constant.PARSE_DIR + dataset + "/obj.csv"
 
         # Columns of categorical features
+        # CAT_COL, NUM_COL, IGN_COL
         if self.dataset == "toy":
             self.CAT_COL = [
                 'ps_ind_02_cat', 'ps_ind_04_cat', 'ps_ind_05_cat',
@@ -69,4 +70,10 @@ class Config:
                 "ps_calc_15_bin", "ps_calc_16_bin", "ps_calc_17_bin",
                 "ps_calc_18_bin", "ps_calc_19_bin", "ps_calc_20_bin"
             ]
+
+        elif self.dataset == "criteo":
+            self.CAT_COL = ["C{:02}".format(x) for x in range(1, 26)]
+            self.NUM_COL = ["I{:02}".format(x) for x in range(1, 13)]
+            self.IGN_COL = []
+
 

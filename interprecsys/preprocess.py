@@ -119,9 +119,9 @@ def parse_criteo(ratio=(8, 1, 1)):
     input_file = "criteoDAC/train.txt"
     input_dir = Constant.RAW_DIR + input_file
 
-    col_L = ['L_{:02d}'.format(x) for x in range(1, 14)]
+    col_I = ['I_{:02d}'.format(x) for x in range(1, 14)]
     col_C = ['C_{:02d}'.format(x) for x in range(1, 27)]
-    criteo_colulms = ['label'] + col_L + col_C
+    criteo_colulms = ['label'] + col_I + col_C
 
     print("Preprocessing criteo dataset ...")
 
@@ -206,8 +206,8 @@ def _fix_missing_values(df):
         'object': "00000000"
     }
     for col in df.columns:
-        patch = nan_convert_map[df[col].dtype]
-        df[col] = df[col].fillna(np.nan, patch, regex=True)
+        patch = nan_convert_map[str(df[col].dtype)]
+        df[col] = df[col].fillna(patch)
 
     return df
 
