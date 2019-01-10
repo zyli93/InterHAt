@@ -71,9 +71,12 @@ class Config:
                 "ps_calc_18_bin", "ps_calc_19_bin", "ps_calc_20_bin"
             ]
 
-        elif self.dataset == "criteo":
+        elif self.dataset == "criteoDAC":
             self.CAT_COL = ["C{:02}".format(x) for x in range(1, 26)]
             self.NUM_COL = ["I{:02}".format(x) for x in range(1, 13)]
             self.IGN_COL = []
+
+        else:
+             raise ValueError("Invalid dataset {}".format(dataset))
 
 

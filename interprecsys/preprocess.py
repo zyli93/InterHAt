@@ -27,8 +27,6 @@ DATA_DIR = Constant.GRAPH_DIR
 def clk_thru_neg_sample(dataset):
     """
     Create negative samples for Click Through
-
-    TODO: to implement according to dataset.
     """
     pass
 
@@ -75,12 +73,9 @@ def parse_features(infile, dataset):
     """
     Load entity features and transfer
 
-    TODO:
-        (1) decide whether to split cus and obj
-        (2) to implement
+    NOT USED
     """
 
-    # TODO: implement dataset specific parsing func
     # Notes: (1) return pandas dataframe
     #        (2) split cus and obj feature by prefix in cols
     def parse_dataset_a():
@@ -98,9 +93,6 @@ def parse_features(infile, dataset):
         df_ct, df_cus, df_obj = parse_dataset_a()
     elif dataset == "B":
         df_ct, df_cus, df_obj = parse_dataset_b()
-
-    # TODO: split train and test in df_ct
-    # TODO: check out whether other model used valid set
 
     df_ct_train.to_csv(output_path + "/train.csv")
     df_ct_test.to_csv(output_path + "/test.csv")
@@ -184,7 +176,7 @@ def parse_avazu(ratio=(8, 1, 1)):
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test Dataset ...")
-    df_train, df_val, df_test = _split_ind_val_label(df, ratio)
+    df_train, df_val, df_test = _split_train_validation_test(df, ratio)
 
     # split ind, val, and test
     print("\tSplitting Index, Value, and Labels ...")
@@ -227,6 +219,8 @@ def _split_train_validation_test(df, ratio):
         df_train_val,
         test_size=(ratio[1]/(sum(ratio[:2]))))
 
+    print(type(df_train))
+
     return df_train, df_val, df_test
 
 
@@ -237,11 +231,11 @@ def _split_ind_val_label(dataset, df_train, df_test, df_val):
                                   cfg=Config(dataset=dataset))
 
     # parse datasets
-    df_train_split = feat_dict.parse(df=df_train, has_label=True)
-    df_test_split = feat_dict.parse(df=df_test, has_label=True)
-    df_val_split = feat_dict.parse(df=df_val, has_label=True)
+    df_train_split = feat_dict.parse(df=df_train)
+    df_test_split = feat_dict.parse(df=df_test)
+    df_val_split = feat_dict.parse(df=df_val)
 
-    return df_train_split, df_val_split, df_test_split
+    return df_train_split, df_val_split, df_test_split, feat_dict
 
 
 def _save_splits(splits, dataset):
@@ -249,10 +243,27 @@ def _save_splits(splits, dataset):
     usage = ["train", "val", "test"]
     term = ["ind", "value", "label"]
 
+    if not os.path.isdir(Constant.PARSE_DIR + dataset):
+        os.mkdir(Constant.PARSE_DIR + dataset)
+
     for i, u in enumerate(usage):
         for j, t in enumerate(term):
+            # np.savetxt(
+            #     fname=Constant.PARSE_DIR + "{}/{}_{}.csv".format(dataset, u, t),
+            #     X=splits[i][j],
+            #     delimiter=','
+            # )
             splits[i][j].to_csv(
-                Constant.PARSE_DIR + "{}/{}_{}.csv".format(dataset, u, t))
+                Constant.PARSE_DIR + "{}/{}_{}.csv".format(dataset, u, t),
+                index=False,
+                header=False
+            )
+
+    with open(Constant.PARSE_DIR + "{}/feat_dict".format(dataset), "w") as fout:
+        # feature size field size
+        fout.write("{} {}".format(splits[3].feat_dim, splits[0][0].shape[1]))
+
+    # TODO: select column to discard
 
 
 if __name__ == "__main__":

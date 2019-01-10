@@ -138,4 +138,5 @@ nvidia-docker run -it --rm -v /local2/zyli/InterpRecSys:/workspace/InterpRecSys 
 
 # There are some issues:
 1. to many categories in criteo
-2. 
+2. to discard columns, just use IGN_COL
+3. check correctness of this

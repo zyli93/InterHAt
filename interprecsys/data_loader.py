@@ -20,144 +20,85 @@ DATA_DIR = Constant.PARSE_DIR
 class DataLoader:
     def __init__(self
                  , dataset
-                 , use_graph
-                 , entity_graph_threshold
                  , batch_size):
         """
         :param: dataset: name of dataset
         :param: use_graph: whether need to build graph
-        :param: entity_graph_threshold:
         :param: batch_size:
         """
 
         # ==== params =====
-        self.use_graph = use_graph
         self.dataset = dataset
         self.cfg = Config(dataset=dataset)
 
+        # ===== sizes =====
         self.batch_size = batch_size
+        self.train_size, self.test_size, self.valid_size = 0, 0, 0
 
         # ===== inner variables =====
         self.batch_index = 0
         self.has_next = False
 
-        # ===== load dataset =====
-        # TODO: X_train, X_test not used.
-        self.df_train, self.df_test, \
-            self.X_train, self.y_train, \
-            self.X_test, self.ids_test, \
-            self.cat_feat_idx = self.load_data()
+        # ===== datasets =====
+        self.train_val, self.train_ind, self.train_label = self.load_data("train")
+        self.test_val, self.test_ind, self.test_label = self.load_data("test")
+        self.val_val, self.val_ind, self.val_label = self.load_data("validation")
 
-        # ===== create feature dictionary =====
-        self.feat_dict = FeatureDictionary(df_train=self.df_train,
-                                           df_test=self.df_test,
-                                           cfg=self.cfg)
+        self.train_size = self.train_label.shape[0]
+        self.test_size = self.test_label.shape[0]
+        self.val_size = self.val_label.shape[0]
+        self.feature_size, self.field_size = self.load_statistics()
 
-        self.X_train_ind, self.X_train_val, self.y_train = \
-            self.feat_dict.parse(df=self.df_train, has_label=True)
-        self.X_test_ind, self.X_test_val, self.ids_test = \
-            self.feat_dict.parse(df=self.df_train)
+        # ===== iter count =====
+        self.train_iter_count = self.train_size // self.batch_size
 
-        self.feature_size = self.feat_dict.feat_dim
-        self.field_size = len(self.X_train_ind[0])
-
-        self.trainset_size = len(self.X_train_ind[1])
-
-        # version with GraphSAGE (complex)
-        if self.use_graph:
-
-            self.cus_G = load_graph(dataset, entity_graph_threshold, is_cus=True)  # 1 for cus
-            self.cus_dict = load_dict(dataset, is_cus=True)
-            self.cus_nbr = load_nbr_dict(dataset, entity_graph_threshold, is_cus=True)
-
-            self.obj_G = load_graph(dataset, entity_graph_threshold, is_cus=False)  # 0 for obj
-            self.obj_dict = load_dict(dataset, is_cus=False)
-            self.obj_nbr = load_nbr_dict(dataset, entity_graph_threshold, is_cus=False)
-
-            """
-            TODO: here's a problem. 
-                what exactly do graph-version need for input. 
-                Is it all raw features?
-                Or just column from embedding matrix.
-            """
-
-    def generate_train_batch(self):
+    def load_data(self, usage):
         """
-        generate training batch
+        usage as one of `train`, `test`, `val`
 
+        :param usage:
         :return:
-            - mixed batch of clk-thru and non-clk-thru
-            - there labels
-
+            usage_val.np.array
+            usage_ind.np.array
+            usage_label.np.array
         """
+        if usage not in ["train", "test", "val"]:
+            raise ValueError
+        terms = ["val", "ind", "label"]
+        ret_sets = []
+        data_dir = Constant.PARSE_DIR + self.dataset + "/"
+        for trm in terms:
+            ret_sets.append(
+                pd.read_csv(data_dir + "{}_{}.csv".format(usage, trm)).values
+            )
+
+        return ret_sets
+
+    def generate_train_batch_ivl(self):
         bs, bi = self.batch_size, self.batch_index
-        if (bi + 1) * bs < self.trainset_size:
-            batch_ind = self.X_train_ind[bi * bs: (bi + 1) * bs]
-            batch_val = self.X_train_val[bi * bs: (bi + 1) * bs]
-            batch_label = self.y_train[bi * bs: (bi + 1) * bs]
-            self.batch_index += 1
-        else:
-            batch_ind = self.X_train_ind[bi * bs:]
-            batch_val = self.X_train_val[bi * bs:]
-            batch_label = self.y_train[bi * bs:]
+        end_ind = min((bi + 1) * bs, self.train_size)
+
+        b_ind = self.train_ind[bs * bi:end_ind]
+        b_value = self.train_val[bs * bi: end_ind]
+        b_label = self.train_label[bs * bi: end_ind]
+
+        self.batch_index += 1
+        if self.batch_index == self.train_iter_count:
             self.batch_index = 0
             self.has_next = False
-            self._shuffle_data(is_train=True)
 
-        if self.use_graph:
-            raise NotImplementedError
-        else:
-            return batch_ind, batch_val, batch_label
+        return b_ind, b_value, b_label
 
-    def generate_test_batch(self):
-        """
-        TODO: simple version for now.
-        TODO: what is ids?
-        """
-        return self.X_test_ind, self.X_test_val, self.ids_test
+    def generate_test_ivl(self):
+        return self.test_ind, self.test_val, self.test_label
 
-    def _shuffle_data(self, is_train):
-        """
-        Shuffle data.
+    def generate_val(self):
+        return self.val_ind, self.val_val, self.val_label
 
-        [NOTE] self.X_train, self.X_test not used.
-        :param is_train:
-        """
-        s = np.arange(self.trainset_size)
-        np.random.shuffle(s)
-        if is_train:
-            self.X_train_val = self.X_train_val[s]
-            self.X_train_ind = self.X_train_ind[s]
-            self.y_train = self.y_train[s]
-        else:
-            self.X_test_val = self.X_test_val[s]
-            self.X_test_ind = self.X_test_ind[s]
-            self.ids_test = self.ids_test[s]
-
-    def load_data(self):
-        """
-        load mixed train and test data
-        """
-
-        df_train = pd.read_csv(self.cfg.TRAIN_FILE)
-        df_test = pd.read_csv(self.cfg.TEST_FILE)
-
-        # process missing feature
-        cols = [c for c in df_train.columns if c not in ['id', 'target']]
-
-        df_train["missing_feat"] = np.sum((df_train[cols] == -1).values, axis=1)
-        df_test["missing_feat"] = np.sum((df_test[cols] == -1).values, axis=1)
-
-        # convert pd.DataFrame to np.ndarray
-        X_train = df_train[cols].values
-        y_train = df_train['target'].values
-
-        X_test = df_test[cols].values
-        ids_test = df_test['id'].values
-
-        cat_feat_idx = [i for i, c in enumerate(cols) if c in self.cfg.CAT_COL]
-
-        return df_train, df_test, X_train, y_train, X_test, ids_test, cat_feat_idx
+    def load_statistics(self):
+        with open(Constant.PARSE_DIR + "{}/feat_dict".format(self.dataset), "r") as fin:
+            feat_size, field_size = [int(x) for x in fin.readline().split(" ")]
+        return feat_size, field_size
 
 
 # Feature Dictionary of click through
@@ -205,7 +146,7 @@ class FeatureDictionary(object):
 
         self.feat_dim = tc
 
-    def parse(self, df=None, has_label=False):
+    def parse(self, df=None):
 
         if not self.feat_dict:
             raise ValueError("feat_dict is empty!!")
@@ -213,14 +154,13 @@ class FeatureDictionary(object):
         dfi = df.copy()
 
         # discriminate train or test
-        if has_label:
-            # y = dfi['target'].values.tolist()
-            y = dfi['target'].values
-            dfi.drop(['id', 'target'], axis=1, inplace=True)
-        else:
-            # ids = dfi['id'].values.tolist()
-            ids = dfi['id'].values
+        # y = dfi['target'].values.tolist()
+        # y = dfi['label'].values
+        y = dfi['label']
+        if 'id' in dfi.columns:
             dfi.drop(['id'], axis=1, inplace=True)
+
+        dfi.drop(['label'], axis=1, inplace=True)
 
         # dfi for feature index
         # dfv for feature value which can be either binary (1/0) or float (e.g., 10.24)
@@ -246,11 +186,8 @@ class FeatureDictionary(object):
         # xv = dfv.values.tolist()
 
         # [New] convert to np.ndarray instead of list
-        xi = dfi.values
-        xv = dfv.values
+        # xi = dfi.values
+        # xv = dfv.values
 
-        if has_label:  # train
-            return xi, xv, y
-        else:  # test
-            return xi, xv, ids
-
+        # return xi, xv, y
+        return dfi, dfv, y

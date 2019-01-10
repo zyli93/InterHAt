@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from sklearn.metrics import jaccard_similarity_score
+from sklearn.metrics import roc_auc_score, log_loss
 
 from const import Constant
 
@@ -77,3 +78,16 @@ def create_folder_tree(dataset):
         if not os.path.isdir(x):
             os.mkdir(x)
 
+
+def evaluate_metrics(y_true, y_predict):
+    """
+    evaluate performance by AUC and LogLoss
+    :param y_true: 1D numpy array
+    :param y_predict: 1D numpy array
+    :return:
+    """
+
+    auc = roc_auc_score(y_true=y_true, y_score=y_predict)
+    lloss = log_loss(y_true=y_true, y_pred=y_predict)
+
+    return auc, lloss

@@ -11,8 +11,6 @@ def single_attention(queries,
                      ):
     """Single attention
 
-    TODO: find initializer for W, b, and h.
-
     :param queries: 1-D Tensor, shape=[C], query vector
     :param keys: 3-D Tensor, shape=[N, T, C], key tensor
     :param values: 3-D Tensor, shape=[N, T, C], value tensor

@@ -80,8 +80,6 @@ class Interprecsys:
     def build_graph(self):
         """
         Building computational graph, modularize by `with`.
-
-        TODO: implementation
         """
 
         # ===== Get embeddings for input features =====
@@ -96,9 +94,6 @@ class Interprecsys:
 # ===== InterpRecSys Base Model =====
 class InterprecsysBase:
 
-    """
-    TODO: write tensorboard summary
-    """
     def __init__(self
                  , embedding_dim
                  , field_size
@@ -116,7 +111,7 @@ class InterprecsysBase:
         self.embedding_dim = embedding_dim  # the C
         self.scale_embedding = scale_embedding  # bool
         self.field_size = field_size
-        self.feat_size = feature_size  # the T TODO: some places misused
+        self.feat_size = feature_size  # the T
 
         self.dropout_rate = dropout_rate
         self.random_seed = random_seed
@@ -201,7 +196,6 @@ class InterprecsysBase:
 
         # build second order cross
         # TODO: could be other functions
-        # TODO: find out difference between name_scope and variable_scope
         # TODO: some of var names are `over-scoped`.
             # with tf.name_scope("sec_order_cross"):
 
@@ -285,5 +279,5 @@ class InterprecsysBase:
             tf.summary.scalar("Mean_Loss", self.mean_loss)
 
             self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)
-            self.merged = tf.summary.merge_all()  # TODO: other metrics outside model
+            self.merged = tf.summary.merge_all()
 
