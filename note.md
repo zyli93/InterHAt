@@ -140,3 +140,9 @@ nvidia-docker run -it --rm -v /local2/zyli/InterpRecSys:/workspace/InterpRecSys 
 1. to many categories in criteo
 2. to discard columns, just use IGN_COL
 3. check correctness of this
+
+4. Writing:
+(1) Other drawbacks of other deep models
+
+5. who used Criteo: DeepFM, xDeepFM, DCN PNN
+    have emailed all four group of researchers about this issue.

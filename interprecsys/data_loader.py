@@ -7,6 +7,8 @@ NOTE: some code borrowed from here
 @Author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
 """
 
+import pickle
+
 from itertools import product
 import numpy as np
 import pandas as pd
@@ -146,6 +148,10 @@ class FeatureDictionary(object):
 
         self.feat_dim = tc
 
+        # * Debug *
+        with open("feat_dict_debug", "wb") as fout:
+            pickle.dump(self, fout)
+
     def parse(self, df=None):
 
         if not self.feat_dict:
@@ -156,11 +162,19 @@ class FeatureDictionary(object):
         # discriminate train or test
         # y = dfi['target'].values.tolist()
         # y = dfi['label'].values
-        y = dfi['label']
+        if 'label' in dfi.columns:
+            y_col_name = "label"
+        elif 'target' in dfi.columns:
+            y_col_name = "target"
+        else:
+            raise KeyError("Cannot find [label] or [target] column in the dataset.")
+
+        y = dfi[y_col_name]
+        dfi.drop([y_col_name], axis=1, inplace=True)
+
         if 'id' in dfi.columns:
             dfi.drop(['id'], axis=1, inplace=True)
 
-        dfi.drop(['label'], axis=1, inplace=True)
 
         # dfi for feature index
         # dfv for feature value which can be either binary (1/0) or float (e.g., 10.24)

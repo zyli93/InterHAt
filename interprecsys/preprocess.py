@@ -190,6 +190,35 @@ def parse_avazu(ratio=(8, 1, 1)):
     _save_splits(full_splits, dataset="avazu")
 
 
+def parse_safe_driver(ratio=(8, 1, 1)):
+    dataset = "safedriver"
+    input_file = "safedriver/train.csv"
+    input_dir = Constant.RAW_DIR + input_file
+
+    print("Preprocessing safedriver dataset ...")
+
+    # load dataset
+    print("\tLoading dataset ...")
+    df = pd.read_csv(input_dir)
+
+    # fix missing value
+
+    # split train, valid, and test
+    print("\tSplitting Train, Valid, and Test Dataset ...")
+    df_train, df_val, df_test = _split_train_validation_test(df, ratio)
+
+    # split ind, val, and test
+    print("\tSplitting Index, Value, and Labels ...")
+    full_splits = _split_ind_val_label(dataset=dataset,
+                                       df_train=df_train,
+                                       df_test=df_test,
+                                       df_val=df_val)
+
+    # save 3X3 dataframes to `parsed` folder
+    print("\tSaving all splited matrices ...")
+    _save_splits(full_splits, dataset=dataset)
+
+
 def _fix_missing_values(df):
     nan_convert_map = {
         'int64': 0,
@@ -235,6 +264,10 @@ def _split_ind_val_label(dataset, df_train, df_test, df_val):
     df_test_split = feat_dict.parse(df=df_test)
     df_val_split = feat_dict.parse(df=df_val)
 
+    print(df_train_split[0].columns)
+    print(df_test_split[0].columns)
+    print(df_val_split[0].columns)
+
     return df_train_split, df_val_split, df_test_split, feat_dict
 
 
@@ -277,6 +310,8 @@ if __name__ == "__main__":
         parse_criteo(ratio)
     elif dataset == "avazu":
         parse_avazu(ratio)
+    elif dataset == "safedriver":
+        parse_safe_driver(ratio)
     elif dataset == "movielens":
         raise NotImplementedError("To Be Implemented.")
     else:
