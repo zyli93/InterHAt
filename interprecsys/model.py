@@ -230,11 +230,13 @@ class InterprecsysBase:
                                             use_bias=True)  # (N, (T+2), 1)
 
             all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
-            self.before_middle_result = all_features
+            self.before_dense = all_features
             logits = tf.squeeze(tf.layers.dense(inputs=all_features,
                                                 units=1,
-                                                activation=tf.nn.sigmoid), axis=1)  # N
-            self.middle_result = logits
+                                                # activation=tf.nn.relu), axis=1)  # N
+                                                activation=None), axis=1)
+
+            self.see_logits = logits
 
         with tf.name_scope("Accuracy"):
             # self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")

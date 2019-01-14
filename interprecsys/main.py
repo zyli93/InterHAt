@@ -115,18 +115,21 @@ def run_model(data_loader,
                 }
 
                 op, summary_merged, loss, acc, pred, \
-                caf, before_res, res = sess.run(
+                caf, before_res, logits, emb = sess.run(
                     fetches=[model.train_op,
                              model.merged,
                              model.mean_loss,
                              model.acc,
                              model.predict,
                              model.concat_all_feat,
-                             model.before_middle_result,
-                             model.middle_result,
+                             model.before_dense,
+                             model.see_logits,
+                             model.emb
                              ],
                     feed_dict=feed_dict
                 )
+                print("embedding")
+                print(emb)
                 print("concat all feat")
                 print(caf.shape)
                 # print(caf)
@@ -134,8 +137,8 @@ def run_model(data_loader,
                 print(before_res.shape)
                 print(before_res)
                 print("- - then dense")
-                print(res.shape)
-                print(res)
+                print(logits.shape)
+                print(logits)
                 print("- - [Predict]")
                 print(pred.shape)
                 print(pred)

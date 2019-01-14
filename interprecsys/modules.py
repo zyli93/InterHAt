@@ -43,7 +43,7 @@ def normalize(inputs,
 def embedding(inputs, 
               vocab_size, 
               num_units, 
-              zero_pad=True, 
+              zero_pad=False,
               scale=True,
               scope="embedding", 
               reuse=None):
