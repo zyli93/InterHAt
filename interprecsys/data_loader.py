@@ -44,7 +44,7 @@ class DataLoader:
         # ===== datasets =====
         self.train_val, self.train_ind, self.train_label = self.load_data("train")
         self.test_val, self.test_ind, self.test_label = self.load_data("test")
-        self.val_val, self.val_ind, self.val_label = self.load_data("validation")
+        self.val_val, self.val_ind, self.val_label = self.load_data("val")
 
         self.train_size = self.train_label.shape[0]
         self.test_size = self.test_label.shape[0]
@@ -66,12 +66,12 @@ class DataLoader:
         """
         if usage not in ["train", "test", "val"]:
             raise ValueError
-        terms = ["val", "ind", "label"]
+        terms = ["value", "ind", "label"]
         ret_sets = []
         data_dir = Constant.PARSE_DIR + self.dataset + "/"
         for trm in terms:
             ret_sets.append(
-                pd.read_csv(data_dir + "{}_{}.csv".format(usage, trm)).values
+                pd.read_csv(data_dir + "{}_{}.csv".format(usage, trm), header=None).values
             )
 
         return ret_sets
@@ -174,7 +174,6 @@ class FeatureDictionary(object):
 
         if 'id' in dfi.columns:
             dfi.drop(['id'], axis=1, inplace=True)
-
 
         # dfi for feature index
         # dfv for feature value which can be either binary (1/0) or float (e.g., 10.24)

@@ -25,7 +25,7 @@ flags.DEFINE_float('learning_rate', 0.001, 'Learning Rate.')
 flags.DEFINE_float('l2_reg', 0.01, 'Weight of L2 Regularizations.')
 
 # Parameter Space
-flags.DEFINE_integer('embedding_size', 256, 'Hidden Embedding Size.')
+flags.DEFINE_integer('embedding_size', 8, 'Hidden Embedding Size.')
 
 # Hyper-param
 flags.DEFINE_string('trial_id', '001', 'The ID of the current run.')
@@ -68,8 +68,8 @@ def run_model(data_loader,
 
     # ===== Configurations of runtime environment =====
     config = tf.ConfigProto(
-        allow_soft_placement=True,
-        log_device_placement=True
+        allow_soft_placement=True
+        # , log_device_placement=True
     )
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
@@ -82,9 +82,11 @@ def run_model(data_loader,
         - loss
     """
     # set dir for runtime log
-    log_dir = os.path.join(Constant.LOG_DIR, FLAGS.dataset, "train")
+    log_dir = os.path.join(Constant.LOG_DIR, FLAGS.dataset, "train_" + FLAGS.trial_id)
 
-    with tf.Session(config=config) as sess:
+    sess = tf.Session(config=config)
+
+    with sess.as_default():
 
         # training
         # ===== Initialization of params =====
@@ -112,13 +114,36 @@ def run_model(data_loader,
                     model.is_training: True
                 }
 
-                op, summary_merged, loss, acc = sess.run(
+                op, summary_merged, loss, acc, pred, \
+                caf, before_res, res = sess.run(
                     fetches=[model.train_op,
                              model.merged,
                              model.mean_loss,
-                             model.acc],
+                             model.acc,
+                             model.predict,
+                             model.concat_all_feat,
+                             model.before_middle_result,
+                             model.middle_result,
+                             ],
                     feed_dict=feed_dict
                 )
+                print("concat all feat")
+                print(caf.shape)
+                # print(caf)
+                print("- then conv1d")
+                print(before_res.shape)
+                print(before_res)
+                print("- - then dense")
+                print(res.shape)
+                print(res)
+                print("- - [Predict]")
+                print(pred.shape)
+                print(pred)
+                print("- - [Label]")
+                print(batch_label.T)
+                print("- - Mean Loss")
+                print(loss)
+                print()
 
                 if sess.run(model.global_step) % FLAGS.num_iter_per_save == 0:
                     print("\tSaving CKPT at Global Step [{}]!".format(sess.run(model.global_step)))
@@ -129,6 +154,7 @@ def run_model(data_loader,
                 train_writer.add_summary(summary_merged,
                                          global_step=sess.run(model.global_step))
 
+    print("end")
 
 def run_evaluation(data_loader,
                    model):
@@ -209,8 +235,11 @@ def main(argv):
     run_model(data_loader=dl, model=model, epochs=FLAGS.epoch, load_recent=FLAGS.load_recent)
 
     # ===== Model Testing ======
-    run_evaluation(data_loader=dl, model=model)
+    # run_evaluation(data_loader=dl, model=model)
 
 
 if __name__ == '__main__':
+    # to be deleted later
+    import numpy as np
+    np.set_printoptions(threshold=np.nan)
     tf.app.run()

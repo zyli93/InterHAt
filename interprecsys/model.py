@@ -177,7 +177,7 @@ class InterprecsysBase:
                                          training=self.is_training)
 
         # multi-layer, multi-head attention
-        with tf.name_scope("multilayer_attn"):
+        with tf.name_scope("Multilayer_attn"):
             for i_block in range(self.num_block):
                 with tf.variable_scope("attn_head_{}".format(str(i_block))) as scope:
                     # Multihead Attention
@@ -187,19 +187,20 @@ class InterprecsysBase:
                                                    num_heads=self.num_head,
                                                    dropout_rate=self.dropout_rate,
                                                    causality=False,
-                                                   is_training=self.is_training)
+                                                   is_training=self.is_training,
+                                                   scope="multihead_attn")
 
                     # Feed Forward
                     features = feedforward(inputs=features,
                                            num_units=[4 * self.embedding_dim, self.embedding_dim],
-                                           scope=scope)  # (N, T, C)
+                                           scope="feed_forward")  # (N, T, C)
 
         # build second order cross
         # TODO: could be other functions
         # TODO: some of var names are `over-scoped`.
             # with tf.name_scope("sec_order_cross"):
 
-        with tf.variable_scope("sec_order_cross") as scope:
+        with tf.name_scope("Third_order") as scope:
             second_cross = tf.layers.conv1d(inputs=tf.transpose(features, [0, 2, 1]),  # transpose: (N, C, T)
                                             filters=1,
                                             kernel_size=1,
@@ -210,14 +211,16 @@ class InterprecsysBase:
             third_cross = single_attention(queries=second_cross,
                                            keys=self.emb,
                                            values=self.emb,
-                                           scope=scope,
+                                           scope="single_attn",
                                            regularize=True)  # (N, 1, C)
 
-        with tf.name_scope("combined_features"):
+        with tf.name_scope("Merged_features"):
             # concatenate enc, second_cross, and third_cross
             all_features = tf.concat([self.emb, second_cross, third_cross],
                                      axis=1,
-                                     name="combined_features")  # (N, (T+2), C)
+                                     name="concat_feature")  # (N, (T+2), C)
+
+            self.concat_all_feat = all_features
 
             # TODO: other options of condensing information
             all_features = tf.layers.conv1d(inputs=all_features,
@@ -227,19 +230,22 @@ class InterprecsysBase:
                                             use_bias=True)  # (N, (T+2), 1)
 
             all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
+            self.before_middle_result = all_features
             logits = tf.squeeze(tf.layers.dense(inputs=all_features,
                                                 units=1,
-                                                activation=tf.nn.relu), axis=1)  # N
-
-        self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
+                                                activation=tf.nn.sigmoid), axis=1)  # N
+            self.middle_result = logits
 
         with tf.name_scope("Accuracy"):
-            if self.label is None:
-                half_size = self.batch_size / 2
-                pseudo_label = tf.constant([1.0] * half_size + [0.0] * half_size)  # half 1 & half 0
-                self.acc, _ = tf.metrics.accuracy(labels=pseudo_label, predictions=self.predict)
-            else:
-                self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
+            # self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
+            self.predict = tf.to_int32(tf.round(logits), name="predicts")
+            # if self.label is None:
+            #     half_size = self.batch_size / 2
+            #     pseudo_label = tf.constant([1.0] * half_size + [0.0] * half_size)  # half 1 & half 0
+            #     self.acc, _ = tf.metrics.accuracy(labels=pseudo_label, predictions=self.predict)
+            # else:
+            #     self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
+            self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
             tf.summary.scalar("Accuracy", self.acc)
 
         # ===== ADD OTHER METRICS HERE =====
@@ -250,18 +256,30 @@ class InterprecsysBase:
         """
         regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-        if self.label is None:
-            pos_label, neg_label = tf.split(2, tf.sigmoid(logits), axis=0)
-            self.loss = tf.add(
-                tf.reduce_sum(
-                    tf.subtract(neg_label, pos_label, name="training_loss_nolabel")),
-                regularization_loss,
-                name="training_loss_nolabel_reg"
-            )
-            self.mean_loss = tf.divide(self.loss,
-                                       tf.to_float(self.batch_size/2),
-                                       name="mean_loss_nolabel_reg")
-        else:
+        # if self.label is None:
+        #     pos_label, neg_label = tf.split(2, tf.sigmoid(logits), axis=0)
+        #     self.loss = tf.add(
+        #         tf.reduce_sum(
+        #             tf.subtract(neg_label, pos_label, name="training_loss_nolabel")),
+        #         regularization_loss,
+        #         name="training_loss_nolabel_reg"
+        #     )
+        #     self.mean_loss = tf.divide(self.loss,
+        #                                tf.to_float(self.batch_size/2),
+        #                                name="mean_loss_nolabel_reg")
+        # else:
+        #     self.middle_result = logits
+        #     self.loss = tf.add(
+        #         tf.reduce_sum(
+        #             tf.nn.sigmoid_cross_entropy_with_logits(
+        #                 labels=self.label,
+        #                 logits=logits,
+        #                 name="training_loss_label")),
+        #         regularization_loss,
+        #         name="training_loss_label_reg"
+        #     )
+
+        with tf.name_scope("Mean_loss"):
             self.loss = tf.add(
                 tf.reduce_sum(
                     tf.nn.sigmoid_cross_entropy_with_logits(
@@ -278,6 +296,6 @@ class InterprecsysBase:
 
             tf.summary.scalar("Mean_Loss", self.mean_loss)
 
-            self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)
-            self.merged = tf.summary.merge_all()
+        self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)
+        self.merged = tf.summary.merge_all()
 

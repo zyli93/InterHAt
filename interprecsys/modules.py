@@ -39,6 +39,7 @@ def normalize(inputs,
         
     return outputs
 
+
 def embedding(inputs, 
               vocab_size, 
               num_units, 
@@ -166,8 +167,7 @@ def positional_encoding(inputs,
         return outputs
 
 
-
-def multihead_attention(queries, 
+def multihead_attention(queries,
                         keys, 
                         num_units=None, 
                         num_heads=8, 
@@ -204,7 +204,6 @@ def multihead_attention(queries,
         V = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
         
         # Split and concat
-        print("Q shape", Q.get_shape().as_list)
         Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
         K_ = tf.concat(tf.split(K, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
         V_ = tf.concat(tf.split(V, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
@@ -257,6 +256,7 @@ def multihead_attention(queries,
         outputs = normalize(outputs) # (N, T_q, C)
  
     return outputs
+
 
 def feedforward(inputs, 
                 num_units=[2048, 512],
