@@ -115,10 +115,11 @@ def run_model(data_loader,
                     model.is_training: True
                 }
 
-                op, summary_merged, mean_loss, acc, pred, \
-                all_feat, logits, emb, \
+                op, summary_merged, \
+                mean_loss, acc, pred, \
+                all_feat, logits, \
                 reg, loss_term, \
-                waf= sess.run(
+                waf, wasf = sess.run(
                     fetches=[model.train_op,
                              model.merged,
                              model.mean_loss,
@@ -126,33 +127,40 @@ def run_model(data_loader,
                              model.predict,
                              model.all_features,
                              model.logits,
-                             model.emb,
                              model.reg_term,
                              model.loss,
+                             model.weight_all_feat,
+                             model.weighted_sum_all_feature
                              ],
                     feed_dict=feed_dict
                 )
-                # print("embedding")
-                # print(emb)
                 print("concat all feat")
                 print(all_feat.shape)
                 # print(caf)
-                print("- then conv1d")
-                print(before_res.shape)
-                print(before_res)
-                print("- - then dense")
+
+                print("conv1d results")
+                print(waf.shape)
+                print(waf)
+
+                print("weight sum results")
+                print(wasf.shape)
+                print(wasf)
+
+                print("dense results")
                 print(logits.shape)
                 print(logits)
-                print("- - [Predict]")
+
+                print("[Predictions]")
                 print(pred.shape)
                 print(pred)
-                print("- - [Label]")
+
+                print("[Label]")
                 print(batch_label.T)
-                print("- - Mean Loss")
+                print("[Mean Loss]")
                 print(mean_loss)
-                print("- - Regularizaiton Term")
+                print("[Regularizaiton Term]")
                 print(reg)
-                print("- - Loss Term")
+                print("[Loss Term]")
                 print(loss_term)
                 print()
 

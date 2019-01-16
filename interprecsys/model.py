@@ -226,7 +226,7 @@ class InterprecsysBase:
                                            axis=1,
                                            name="concat_feature")  # (N, (T+2), C)
 
-            # TODO: other options of condensing information
+            # ===== Column wise Conv-1D =====
             self.weight_all_feat = tf.layers.conv1d(inputs=self.all_features,
                                                     filters=1,
                                                     kernel_size=1,
@@ -243,11 +243,14 @@ class InterprecsysBase:
                                                 activation=tf.nn.relu), axis=1)  # N
                                                 # activation=None), axis=1)
             """
+
+            # ===== Weighted Sum of Features =====
             self.weighted_sum_all_feature = tf.reduce_sum(
                 tf.multiply(self.all_features, self.weight_all_feat),  # (N, (T+2), C)
                 axis=2, name="Merged_feature"
             )  # (N, (T+2))
 
+            # ===== Dense layers: merging from T+2 to 1 =====
             self.logits = tf.squeeze(tf.layers.dense(
                 inputs=self.weighted_sum_all_feature,
                 units=1,
@@ -255,8 +258,10 @@ class InterprecsysBase:
                 use_bias=True,
                 name="Logits"), axis=1)  # (N)
 
+        # ===== Accuracy =====
         with tf.name_scope("Accuracy"):
             self.predict = tf.to_int32(tf.round(self.logits), name="predicts")
+            self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
             tf.summary.scalar("Accuracy", self.acc)
 
         # ===== ADD OTHER METRICS HERE =====
