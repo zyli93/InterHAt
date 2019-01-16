@@ -227,12 +227,17 @@ class InterprecsysBase:
                                            name="concat_feature")  # (N, (T+2), C)
 
             # ===== Column wise Conv-1D =====
-            self.weight_all_feat = tf.layers.conv1d(inputs=self.all_features,
-                                                    filters=1,
-                                                    kernel_size=1,
-                                                    activation=tf.nn.relu,
-                                                    use_bias=True,
-                                                    name="Merged_feature_map")  # (N, (T+2), 1)
+
+            # Generate a weight of all features, sum up to one
+
+            # TODO: tune - conv1d's activation function, might be negative
+            self.weight_all_feat = tf.nn.softmax(
+                tf.layers.conv1d(inputs=self.all_features,
+                                 filters=1,
+                                 kernel_size=1,
+                                 activation=tf.nn.relu,
+                                 use_bias=True),
+                name="Weight_of_All_Features")
             # all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
 
             print(self.all_features.get_shape().as_list())
@@ -247,16 +252,21 @@ class InterprecsysBase:
             # ===== Weighted Sum of Features =====
             self.weighted_sum_all_feature = tf.reduce_sum(
                 tf.multiply(self.all_features, self.weight_all_feat),  # (N, (T+2), C)
-                axis=2, name="Merged_feature"
+                axis=2, name="Weighted_Sum_of_All_Features"
             )  # (N, (T+2))
 
             # ===== Dense layers: merging from T+2 to 1 =====
+            # ** Output Domain: [-inf, +inf] **
+
+            # TODO: tune - dense's activation function
+
             self.logits = tf.squeeze(tf.layers.dense(
                 inputs=self.weighted_sum_all_feature,
                 units=1,
-                activation=tf.nn.relu,
+                activation=None,
                 use_bias=True,
-                name="Logits"), axis=1)  # (N)
+                name="Logits"), axis=1
+            )  # (N)
 
         # ===== Accuracy =====
         with tf.name_scope("Accuracy"):
