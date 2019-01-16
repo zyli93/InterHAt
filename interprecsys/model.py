@@ -233,20 +233,14 @@ class InterprecsysBase:
             self.before_dense = all_features
             logits = tf.squeeze(tf.layers.dense(inputs=all_features,
                                                 units=1,
-                                                # activation=tf.nn.relu), axis=1)  # N
-                                                activation=None), axis=1)
+                                                activation=tf.nn.relu), axis=1)  # N
+                                                # activation=None), axis=1)
 
             self.see_logits = logits
 
         with tf.name_scope("Accuracy"):
             # self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
-            self.predict = tf.to_int32(tf.round(logits), name="predicts")
-            # if self.label is None:
-            #     half_size = self.batch_size / 2
-            #     pseudo_label = tf.constant([1.0] * half_size + [0.0] * half_size)  # half 1 & half 0
-            #     self.acc, _ = tf.metrics.accuracy(labels=pseudo_label, predictions=self.predict)
-            # else:
-            #     self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
+            self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
             self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
             tf.summary.scalar("Accuracy", self.acc)
 
@@ -257,29 +251,10 @@ class InterprecsysBase:
         else: upper half positive and lower half negative, use subtract
         """
         regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-
-        # if self.label is None:
-        #     pos_label, neg_label = tf.split(2, tf.sigmoid(logits), axis=0)
-        #     self.loss = tf.add(
-        #         tf.reduce_sum(
-        #             tf.subtract(neg_label, pos_label, name="training_loss_nolabel")),
-        #         regularization_loss,
-        #         name="training_loss_nolabel_reg"
-        #     )
-        #     self.mean_loss = tf.divide(self.loss,
-        #                                tf.to_float(self.batch_size/2),
-        #                                name="mean_loss_nolabel_reg")
-        # else:
-        #     self.middle_result = logits
-        #     self.loss = tf.add(
-        #         tf.reduce_sum(
-        #             tf.nn.sigmoid_cross_entropy_with_logits(
-        #                 labels=self.label,
-        #                 logits=logits,
-        #                 name="training_loss_label")),
-        #         regularization_loss,
-        #         name="training_loss_label_reg"
-        #     )
+        self.reg_term = regularization_loss
+        
+        # TODO delete later
+        print(logits.get_shape().as_list())
 
         with tf.name_scope("Mean_loss"):
             self.loss = tf.add(
@@ -288,7 +263,7 @@ class InterprecsysBase:
                         labels=self.label,
                         logits=logits,
                         name="training_loss_label")),
-                regularization_loss,
+                self.regularization_weight * regularization_loss,
                 name="training_loss_label_reg"
             )
 

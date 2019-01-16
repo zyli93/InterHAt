@@ -114,8 +114,9 @@ def run_model(data_loader,
                     model.is_training: True
                 }
 
-                op, summary_merged, loss, acc, pred, \
-                caf, before_res, logits, emb = sess.run(
+                op, summary_merged, mean_loss, acc, pred, \
+                caf, before_res, logits, emb, \
+                reg, loss_term = sess.run(
                     fetches=[model.train_op,
                              model.merged,
                              model.mean_loss,
@@ -124,12 +125,14 @@ def run_model(data_loader,
                              model.concat_all_feat,
                              model.before_dense,
                              model.see_logits,
-                             model.emb
+                             model.emb,
+                             model.reg_term,
+                             model.loss,
                              ],
                     feed_dict=feed_dict
                 )
-                print("embedding")
-                print(emb)
+                # print("embedding")
+                # print(emb)
                 print("concat all feat")
                 print(caf.shape)
                 # print(caf)
@@ -145,7 +148,11 @@ def run_model(data_loader,
                 print("- - [Label]")
                 print(batch_label.T)
                 print("- - Mean Loss")
-                print(loss)
+                print(mean_loss)
+                print("- - Regularizaiton Term")
+                print(reg)
+                print("- - Loss Term")
+                print(loss_term)
                 print()
 
                 if sess.run(model.global_step) % FLAGS.num_iter_per_save == 0:

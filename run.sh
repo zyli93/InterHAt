@@ -6,4 +6,5 @@ python interprecsys/main.py \
     --dataset "safedriver" \
     --use_graph=False \
     --num_iter_per_save 100 \
-    --scale_embedding=False
+    --scale_embedding=False \
+    --regularization_weight 0.0
