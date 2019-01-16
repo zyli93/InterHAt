@@ -104,6 +104,7 @@ class InterprecsysBase:
                  , num_head
                  , dropout_rate
                  , regularization_weight
+                 , merge_feat_channel
                  , random_seed=Constant.RANDOM_SEED
                  , scale_embedding=False
                  ):
@@ -118,6 +119,7 @@ class InterprecsysBase:
         self.num_block = num_block  # num of blocks of multi-head attn
         self.num_head = num_head  # num of heads
         self.regularization_weight = regularization_weight
+        self.merge_feat_channel = merge_feat_channel
 
         # training parameters
         self.learning_rate = learning_rate
@@ -134,6 +136,10 @@ class InterprecsysBase:
         # ports to the outside
         self.loss, self.mean_loss = None, None
         self.predict, self.acc = None, None
+
+        # merging intermediate results
+        self.all_features, self.weight_all_feat, self.weighted_sum_all_feature = None, None, None
+        self.logits = None
 
         # global training steps
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -216,32 +222,41 @@ class InterprecsysBase:
 
         with tf.name_scope("Merged_features"):
             # concatenate enc, second_cross, and third_cross
-            all_features = tf.concat([self.emb, second_cross, third_cross],
-                                     axis=1,
-                                     name="concat_feature")  # (N, (T+2), C)
-
-            self.concat_all_feat = all_features
+            self.all_features = tf.concat([self.emb, second_cross, third_cross],
+                                           axis=1,
+                                           name="concat_feature")  # (N, (T+2), C)
 
             # TODO: other options of condensing information
-            all_features = tf.layers.conv1d(inputs=all_features,
-                                            filters=1,
-                                            kernel_size=1,
-                                            activation=tf.nn.relu,
-                                            use_bias=True)  # (N, (T+2), 1)
+            self.weight_all_feat = tf.layers.conv1d(inputs=self.all_features,
+                                                    filters=1,
+                                                    kernel_size=1,
+                                                    activation=tf.nn.relu,
+                                                    use_bias=True,
+                                                    name="Merged_feature_map")  # (N, (T+2), 1)
+            # all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
 
-            all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
-            self.before_dense = all_features
+            print(self.all_features.get_shape().as_list())
+
+            """
             logits = tf.squeeze(tf.layers.dense(inputs=all_features,
                                                 units=1,
                                                 activation=tf.nn.relu), axis=1)  # N
                                                 # activation=None), axis=1)
+            """
+            self.weighted_sum_all_feature = tf.reduce_sum(
+                tf.multiply(self.all_features, self.weight_all_feat),  # (N, (T+2), C)
+                axis=2, name="Merged_feature"
+            )  # (N, (T+2))
 
-            self.see_logits = logits
+            self.logits = tf.squeeze(tf.layers.dense(
+                inputs=self.weighted_sum_all_feature,
+                units=1,
+                activation=tf.nn.relu,
+                use_bias=True,
+                name="Logits"), axis=1)  # (N)
 
         with tf.name_scope("Accuracy"):
-            # self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
-            self.predict = tf.to_int32(tf.round(tf.sigmoid(logits)), name="predicts")
-            self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
+            self.predict = tf.to_int32(tf.round(self.logits), name="predicts")
             tf.summary.scalar("Accuracy", self.acc)
 
         # ===== ADD OTHER METRICS HERE =====
@@ -252,16 +267,13 @@ class InterprecsysBase:
         """
         regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
         self.reg_term = regularization_loss
-        
-        # TODO delete later
-        print(logits.get_shape().as_list())
 
         with tf.name_scope("Mean_loss"):
             self.loss = tf.add(
                 tf.reduce_sum(
                     tf.nn.sigmoid_cross_entropy_with_logits(
                         labels=self.label,
-                        logits=logits,
+                        logits=self.logits,
                         name="training_loss_label")),
                 self.regularization_weight * regularization_loss,
                 name="training_loss_label_reg"
@@ -275,4 +287,3 @@ class InterprecsysBase:
 
         self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)
         self.merged = tf.summary.merge_all()
-

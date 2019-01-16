@@ -33,6 +33,7 @@ flags.DEFINE_float('entity_graph_threshold', 0.5, 'The threshold used when build
 flags.DEFINE_integer('neg_pos_ratio', 3, 'The ratio of negative samples v.s. positive.')
 flags.DEFINE_float('dropout_rate', 0.1, 'The dropout rate of Transformer model.')
 flags.DEFINE_float('regularization_weight', 0.01, 'The weight of L2-regularization.')
+flags.DEFINE_integer('merge_feat_channel', 8, 'Merging feature channels.')
 
 # Structure & Configure
 flags.DEFINE_integer('random_seed', 2018, 'Random Seed.')
@@ -115,16 +116,16 @@ def run_model(data_loader,
                 }
 
                 op, summary_merged, mean_loss, acc, pred, \
-                caf, before_res, logits, emb, \
-                reg, loss_term = sess.run(
+                all_feat, logits, emb, \
+                reg, loss_term, \
+                waf= sess.run(
                     fetches=[model.train_op,
                              model.merged,
                              model.mean_loss,
                              model.acc,
                              model.predict,
-                             model.concat_all_feat,
-                             model.before_dense,
-                             model.see_logits,
+                             model.all_features,
+                             model.logits,
                              model.emb,
                              model.reg_term,
                              model.loss,
@@ -134,7 +135,7 @@ def run_model(data_loader,
                 # print("embedding")
                 # print(emb)
                 print("concat all feat")
-                print(caf.shape)
+                print(all_feat.shape)
                 # print(caf)
                 print("- then conv1d")
                 print(before_res.shape)
@@ -238,7 +239,8 @@ def main(argv):
             dropout_rate=FLAGS.dropout_rate,
             regularization_weight=FLAGS.regularization_weight,
             random_seed=Constant.RANDOM_SEED,
-            scale_embedding=FLAGS.scale_embedding
+            scale_embedding=FLAGS.scale_embedding,
+            merge_feat_channel=FLAGS.merge_feat_channel
         )
 
     # ===== Model training =====

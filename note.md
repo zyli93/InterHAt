@@ -134,7 +134,7 @@ I think you can first try to run the second one.
 ## Run on nvidia-docker
 nvidia-docker run -it --rm -v /local2/zyli/PDER:/workspace/PDER -v /local2/zyli/nltk_data:/workspace/nltk_data nvcr.io/nvidia/pytorch:18.03-py3
 nvcr.io/nvidia/tensorflow:18.12-py3
-nvidia-docker run -it --rm -v /local2/zyli/InterpRecSys:/workspace/InterpRecSys nvcr.io/nvidia/tensorflow:18.12-py3
+NV_GPU=1 nvidia-docker run -it --rm -v /local2/zyli/InterpRecSys:/workspace/InterpRecSys nvcr.io/nvidia/tensorflow:18.12-py3
 
 # There are some issues:
 1. to many categories in criteo
