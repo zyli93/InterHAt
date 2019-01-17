@@ -226,21 +226,27 @@ class InterprecsysBase:
                                            axis=1,
                                            name="concat_feature")  # (N, (T+2), C)
 
-            # ===== Column wise Conv-1D =====
-
-            # Generate a weight of all features, sum up to one
+            # ===== Generate weights of all features =====
+            # Column wise Conv-1D, ReLU, and Softmax (sum up to one)
 
             # TODO: tune - conv1d's activation function, might be negative
-            self.weight_all_feat = tf.nn.softmax(
-                tf.layers.conv1d(inputs=self.all_features,
-                                 filters=1,
-                                 kernel_size=1,
-                                 activation=tf.nn.relu,
-                                 use_bias=True),
-                name="Weight_of_All_Features")
-            # all_features = tf.squeeze(all_features, axis=2)  # (N, (T+2))
 
-            print(self.all_features.get_shape().as_list())
+            # +++ Del later +++
+            self.linear_act_conv1d = tf.layers.conv1d(
+                inputs=self.all_features, filters=1, kernel_size=1, activation=tf.nn.relu, use_bias=True)
+
+            self.weight_all_feat = tf.nn.softmax(self.linear_act_conv1d)
+
+            # +++ Until here +++
+
+            # +++ Uncomment later +++
+            # self.weight_all_feat = tf.nn.softmax(
+            #     tf.layers.conv1d(inputs=self.all_features,
+            #                      filters=1,
+            #                      kernel_size=1,
+            #                      activation=tf.nn.relu,
+            #                      use_bias=True),
+            #     name="Weight_of_All_Features")
 
             """
             logits = tf.squeeze(tf.layers.dense(inputs=all_features,
@@ -252,7 +258,8 @@ class InterprecsysBase:
             # ===== Weighted Sum of Features =====
             self.weighted_sum_all_feature = tf.reduce_sum(
                 tf.multiply(self.all_features, self.weight_all_feat),  # (N, (T+2), C)
-                axis=2, name="Weighted_Sum_of_All_Features"
+                axis=2,
+                name="Weighted_Sum_of_All_Features"
             )  # (N, (T+2))
 
             # ===== Dense layers: merging from T+2 to 1 =====
@@ -267,6 +274,8 @@ class InterprecsysBase:
                 use_bias=True,
                 name="Logits"), axis=1
             )  # (N)
+
+        self.logits_sigmoid = tf.nn.sigmoid(self.logits)
 
         # ===== Accuracy =====
         with tf.name_scope("Accuracy"):

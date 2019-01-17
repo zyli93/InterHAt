@@ -104,6 +104,8 @@ def run_model(data_loader,
 
             while data_loader.has_next:
 
+                print("Epoch {:d}".format(epoch))
+                print("Batch ID: {}".format(data_loader.batch_index))
                 print("\tRunning Step {}".format(sess.run(model.global_step)))
 
                 batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
@@ -118,8 +120,8 @@ def run_model(data_loader,
                 op, summary_merged, \
                 mean_loss, acc, pred, \
                 all_feat, logits, \
-                reg, loss_term, \
-                waf, wasf = sess.run(
+                reg, loss_term, lgt_sigmoid, \
+                lac, waf, wasf = sess.run(
                     fetches=[model.train_op,
                              model.merged,
                              model.mean_loss,
@@ -129,17 +131,26 @@ def run_model(data_loader,
                              model.logits,
                              model.reg_term,
                              model.loss,
+                             model.logits_sigmoid,
+                             model.linear_act_conv1d,
                              model.weight_all_feat,
                              model.weighted_sum_all_feature
                              ],
                     feed_dict=feed_dict
                 )
+
                 print("concat all feat")
                 print(all_feat.shape)
                 # print(caf)
 
-                print("conv1d results")
-                print(waf.shape)
+                # print("conv1d + softmax results")
+                # print(waf.shape)
+                # print(waf)
+
+                print("linear conv1d activation")
+                print(lac)
+
+                print("Lac after softmax: weight")
                 print(waf)
 
                 print("weight sum results")
@@ -150,16 +161,22 @@ def run_model(data_loader,
                 print(logits.shape)
                 print(logits)
 
+                print("[Logits Sigmoid]")
+                print(lgt_sigmoid)
+
                 print("[Predictions]")
                 print(pred.shape)
                 print(pred)
 
                 print("[Label]")
                 print(batch_label.T)
+
                 print("[Mean Loss]")
                 print(mean_loss)
+
                 print("[Regularizaiton Term]")
                 print(reg)
+
                 print("[Loss Term]")
                 print(loss_term)
                 print()
