@@ -233,9 +233,15 @@ class InterprecsysBase:
 
             # +++ Del later +++
             self.linear_act_conv1d = tf.layers.conv1d(
-                inputs=self.all_features, filters=1, kernel_size=1, activation=tf.nn.relu, use_bias=True)
+                inputs=self.all_features, 
+                filters=1, 
+                kernel_size=1, 
+                activation=tf.nn.tanh, 
+                use_bias=True) # (N, (T+2), 1)
 
-            self.weight_all_feat = tf.nn.softmax(self.linear_act_conv1d)
+            # self.weight_all_feat = tf.nn.softmax(self.linear_act_conv1d,
+            #                                     axis=1)
+            self.weight_all_feat = tf.nn.relu(self.linear_act_conv1d)
 
             # +++ Until here +++
 
@@ -267,19 +273,20 @@ class InterprecsysBase:
 
             # TODO: tune - dense's activation function
 
-            self.logits = tf.squeeze(tf.layers.dense(
-                inputs=self.weighted_sum_all_feature,
-                units=1,
-                activation=None,
-                use_bias=True,
-                name="Logits"), axis=1
-            )  # (N)
+            self.logits = tf.squeeze(
+                    tf.layers.dense(
+                        inputs=self.weighted_sum_all_feature,
+                        units=1,
+                        activation=None,
+                        use_bias=True,
+                        name="Logits"), 
+                    axis=1)  # (N)
 
         self.logits_sigmoid = tf.nn.sigmoid(self.logits)
 
         # ===== Accuracy =====
         with tf.name_scope("Accuracy"):
-            self.predict = tf.to_int32(tf.round(self.logits), name="predicts")
+            self.predict = tf.to_int32(tf.round(tf.nn.sigmoid(self.logits)), name="predicts")
             self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
             tf.summary.scalar("Accuracy", self.acc)
 

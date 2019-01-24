@@ -7,4 +7,5 @@ python interprecsys/main.py \
     --use_graph=False \
     --num_iter_per_save 100 \
     --scale_embedding=False \
-    --regularization_weight 0.0
+    --regularization_weight 0.0 \
+    --embedding_size 128
