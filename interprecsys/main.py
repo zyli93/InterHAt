@@ -14,7 +14,7 @@ flags = tf.app.flags
 # TODO: what is batch norm? Do Batch Norm Somewhere. `Batch Norm Decay`
 
 # Run time
-flags.DEFINE_integer('epoch', 30, 'Number of Epochs.')
+flags.DEFINE_integer('epoch', 300, 'Number of Epochs.')
 flags.DEFINE_integer('batch_size', 64, 'Number of training instance per batch.')
 flags.DEFINE_string('dataset', 'example', 'Name of the dataset.')
 flags.DEFINE_integer('num_iter_per_save', 100, 'Number of iterations per save.')
@@ -110,6 +110,8 @@ def run_model(data_loader,
 
                 batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
 
+                batch_label = batch_label.squeeze()
+
                 feed_dict = {
                     model.X_ind: batch_ind,
                     model.X_val: batch_val,
@@ -138,7 +140,7 @@ def run_model(data_loader,
                              ],
                     feed_dict=feed_dict
                 )
-
+                """
                 print("concat all feat")
                 print(all_feat.shape)
                 # print(caf)
@@ -156,30 +158,37 @@ def run_model(data_loader,
                 print("weight sum results")
                 print(wasf.shape)
                 print(wasf)
+                """
 
                 print("dense results")
                 print(logits.shape)
                 print(logits)
+                """
 
                 print("[Logits Sigmoid]")
                 print(lgt_sigmoid)
 
+                """
                 print("[Predictions]")
                 print(pred.shape)
                 print(pred)
 
                 print("[Label]")
-                print(batch_label.T)
+                print(batch_label)
 
+                """
                 print("[Mean Loss]")
                 print(mean_loss)
 
                 print("[Regularizaiton Term]")
                 print(reg)
+                """
 
                 print("[Loss Term]")
                 print(loss_term)
                 print()
+                # print("labels shape")
+                # print(batch_label.shape)
 
                 if sess.run(model.global_step) % FLAGS.num_iter_per_save == 0:
                     print("\tSaving CKPT at Global Step [{}]!".format(sess.run(model.global_step)))

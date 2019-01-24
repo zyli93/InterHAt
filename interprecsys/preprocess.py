@@ -195,7 +195,7 @@ def parse_safe_driver(ratio=(8, 1, 1)):
     input_file = "safedriver/train.csv"
     input_dir = Constant.RAW_DIR + input_file
 
-    print("Preprocessing safedriver dataset ...")
+    print("Preprocessing safedriver_medium dataset ...")
 
     # load dataset
     print("\tLoading dataset ...")

@@ -222,9 +222,12 @@ class InterprecsysBase:
 
         with tf.name_scope("Merged_features"):
             # concatenate enc, second_cross, and third_cross
+
+            # test on emb features
             self.all_features = tf.concat([self.emb, second_cross, third_cross],
                                            axis=1,
                                            name="concat_feature")  # (N, (T+2), C)
+            # self.all_features = self.emb
 
             # ===== Generate weights of all features =====
             # Column wise Conv-1D, ReLU, and Softmax (sum up to one)
@@ -239,9 +242,15 @@ class InterprecsysBase:
                 activation=tf.nn.tanh, 
                 use_bias=True) # (N, (T+2), 1)
 
+            print("self.linear_act_conv1d all feature shape")
+            print(self.linear_act_conv1d.get_shape().as_list())
+
             # self.weight_all_feat = tf.nn.softmax(self.linear_act_conv1d,
             #                                     axis=1)
             self.weight_all_feat = tf.nn.relu(self.linear_act_conv1d)
+
+            print("self.weighted all feature shape")
+            print(self.weight_all_feat.get_shape().as_list())
 
             # +++ Until here +++
 
@@ -268,6 +277,9 @@ class InterprecsysBase:
                 name="Weighted_Sum_of_All_Features"
             )  # (N, (T+2))
 
+            print("self.weighted sum all feature shape")
+            print(self.weighted_sum_all_feature.get_shape().as_list())
+
             # ===== Dense layers: merging from T+2 to 1 =====
             # ** Output Domain: [-inf, +inf] **
 
@@ -283,6 +295,8 @@ class InterprecsysBase:
                     axis=1)  # (N)
 
         self.logits_sigmoid = tf.nn.sigmoid(self.logits)
+        print("self.logits_sigmoid shape")
+        print(self.logits_sigmoid.get_shape().as_list())
 
         # ===== Accuracy =====
         with tf.name_scope("Accuracy"):
@@ -298,6 +312,11 @@ class InterprecsysBase:
         """
         regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
         self.reg_term = regularization_loss
+
+        print("label shape: Unknown")
+        # print(self.label.get_shape().as_list())
+        print("logits shape")
+        print(self.logits.get_shape().as_list())
 
         with tf.name_scope("Mean_loss"):
             self.loss = tf.add(
