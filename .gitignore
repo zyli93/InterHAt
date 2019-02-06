@@ -187,3 +187,6 @@ dmypy.json
 useful_repo/
 data/
 log/
+
+# .DS_Store
+.DS_Store
