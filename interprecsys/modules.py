@@ -234,18 +234,20 @@ def multihead_attention(queries,
   
         # Activation
         outputs = tf.nn.softmax(outputs) # (h*N, T_q, T_k)
+
+        cross_significance = outputs
          
         # Query Masking
         query_masks = tf.sign(tf.abs(tf.reduce_sum(queries, axis=-1)))  # (N, T_q)
         query_masks = tf.tile(query_masks, [num_heads, 1])  # (h*N, T_q)
         query_masks = tf.tile(tf.expand_dims(query_masks, -1), [1, 1, tf.shape(keys)[1]])  # (h*N, T_q, T_k)
-        outputs *= query_masks # broadcasting. (N, T_q, C)
+        outputs *= query_masks  # broadcasting. (N, T_q, C)
           
         # Dropouts
         outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(is_training))
                
         # Weighted sum
-        outputs = tf.matmul(outputs, V_) # ( h*N, T_q, C/h)
+        outputs = tf.matmul(outputs, V_)  # ( h*N, T_q, C/h)
         
         # Restore shape
         outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
@@ -254,9 +256,9 @@ def multihead_attention(queries,
         outputs += queries
               
         # Normalize
-        outputs = normalize(outputs) # (N, T_q, C)
+        outputs = normalize(outputs)  # (N, T_q, C)
  
-    return outputs
+    return outputs, cross_significance
 
 
 def feedforward(inputs, 
@@ -293,6 +295,7 @@ def feedforward(inputs,
         outputs = normalize(outputs)
     
     return outputs
+
 
 def label_smoothing(inputs, epsilon=0.1):
     '''Applies label smoothing. See https://arxiv.org/abs/1512.00567.

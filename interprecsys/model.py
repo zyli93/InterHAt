@@ -102,6 +102,7 @@ class InterprecsysBase:
                  , batch_size
                  , num_block
                  , num_head
+                 , pool_filter_size
                  , dropout_rate
                  , regularization_weight
                  , merge_feat_channel
@@ -120,11 +121,13 @@ class InterprecsysBase:
         self.num_head = num_head  # num of heads
         self.regularization_weight = regularization_weight
         self.merge_feat_channel = merge_feat_channel
+        self.pool_filter_size = pool_filter_size
 
         # training parameters
         self.learning_rate = learning_rate
         self.batch_size = batch_size
 
+        # ===== Create None variables for object =====
         # variables [None]
         self.embedding_lookup = None
         self.emb = None  # raw features
@@ -135,11 +138,15 @@ class InterprecsysBase:
 
         # ports to the outside
         self.loss, self.mean_loss = None, None
+        self.regularization_loss = None
         self.predict, self.acc = None, None
 
-        # merging intermediate results
-        self.all_features, self.weight_all_feat, self.weighted_sum_all_feature = None, None, None
-        self.logits = None
+        # train/summary operations
+        self.train_op, self.merged = None, None
+
+        # intermediate results
+        self.feature_weights = None
+        self.sigmoid_logits = None
 
         # global training steps
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -149,7 +156,6 @@ class InterprecsysBase:
                                                 beta1=0.9,
                                                 beta2=0.98,
                                                 epsilon=1e-8)
-        self.train_op, self.merged = None, None
 
         self.build_graph()
 
@@ -171,7 +177,8 @@ class InterprecsysBase:
                                  scope="embedding_process")
 
             # multiply embeddings with values (for numeric features)
-            self.emb = tf.multiply(self.emb, tf.expand_dims(self.X_val, axis=2))
+            self.emb = tf.multiply(self.emb,
+                                   tf.expand_dims(self.X_val, axis=2))
 
         # self.emb: raw embedding, features: used for later
         features = self.emb
@@ -186,7 +193,7 @@ class InterprecsysBase:
         with tf.name_scope("Multilayer_attn"):
             for i_block in range(self.num_block):
                 with tf.variable_scope("attn_head_{}".format(str(i_block))) as scope:
-                    # Multihead Attention
+                    # multihead attention
                     features = multihead_attention(queries=features,
                                                    keys=features,
                                                    num_units=self.embedding_dim,
@@ -196,22 +203,19 @@ class InterprecsysBase:
                                                    is_training=self.is_training,
                                                    scope="multihead_attn")
 
-                    # Feed Forward
+                    # feed forward
                     features = feedforward(inputs=features,
                                            num_units=[4 * self.embedding_dim, self.embedding_dim],
                                            scope="feed_forward")  # (N, T, C)
 
-        # build second order cross
-        # TODO: could be other functions
-        # TODO: some of var names are `over-scoped`.
-            # with tf.name_scope("sec_order_cross"):
-
+        # build third order cross
         with tf.name_scope("Third_order") as scope:
             second_cross = tf.layers.conv1d(inputs=tf.transpose(features, [0, 2, 1]),  # transpose: (N, C, T)
                                             filters=1,
                                             kernel_size=1,
                                             activation=tf.nn.relu,
                                             use_bias=True)  # (N, C, 1)
+
             second_cross = tf.transpose(second_cross, [0, 2, 1])  # (N, 1, C)
 
             third_cross = single_attention(queries=second_cross,
@@ -221,117 +225,90 @@ class InterprecsysBase:
                                            regularize=True)  # (N, 1, C)
 
         with tf.name_scope("Merged_features"):
-            # concatenate enc, second_cross, and third_cross
 
-            # test on emb features
-            self.all_features = tf.concat([self.emb, second_cross, third_cross],
-                                           axis=1,
-                                           name="concat_feature")  # (N, (T+2), C)
-            # self.all_features = self.emb
+            # concatenate [enc, second_cross, third_cross]
+            all_features = tf.concat(
+                [self.emb, second_cross, third_cross],
+                axis=1, name="concat_feature")  # (N, (T+2), C)
 
             # ===== Generate weights of all features =====
-            # Column wise Conv-1D, ReLU, and Softmax (sum up to one)
 
-            # TODO: tune - conv1d's activation function, might be negative
+            # column wise Conv-1D, ReLU, and Softmax (sum up to one)
+            # TODO: can be relu+softmax, or direct softmax
+            self.feature_weights = tf.nn.softmax(
+                tf.layers.conv1d(inputs=all_features,
+                                 filters=1,
+                                 kernel_size=1,
+                                 activation=tf.nn.relu,
+                                 use_bias=True),  # (N, (T+2), 1)
+                name="Feature_attentive_weights"
+            )  # (N, (T+2), 1)
 
-            # +++ Del later +++
-            self.linear_act_conv1d = tf.layers.conv1d(
-                inputs=self.all_features, 
-                filters=1, 
-                kernel_size=1, 
-                activation=tf.nn.tanh, 
-                use_bias=True) # (N, (T+2), 1)
+            # condense features with pooling - feature abstracts
+            condense_feature = tf.layers.max_pooling1d(
+                tf.layers.conv1d(
+                    input=all_features,
+                    filters=self.pool_filter_size,
+                    kernel_size=1,
+                    activation=tf.nn.relu,
+                    use_bias=True
+                ),  # (N, (T+2), pool_filter_size)
+                name="Feature_abstracts"
+            )  # (N, (T+2), 1)
 
-            print("self.linear_act_conv1d all feature shape")
-            print(self.linear_act_conv1d.get_shape().as_list())
+            # predictions in terms of logits
+            logits = tf.reduce_sum(
+                tf.multiply(
+                    tf.squeeze(self.feature_weights),
+                    tf.squeeze(condense_feature)
+                ),  # (N, T+2)
+                axis=1,
+                name="Logits"
+            )  # (N)
 
-            # self.weight_all_feat = tf.nn.softmax(self.linear_act_conv1d,
-            #                                     axis=1)
-            self.weight_all_feat = tf.nn.relu(self.linear_act_conv1d)
+            # # ===== Weighted Sum of Features =====
+            #
+            # weighted_sum_all_feature = tf.reduce_sum(
+            #     tf.multiply(all_features,
+            #                self.feature_weights),  # (N, (T+2), C)
+            #     axis=2,
+            #     name="Weighted_Sum_of_All_Features"
+            # )  # (N, (T+2))
+            #
+            # # ===== Dense layers: merging from T+2 to 1 =====
+            #
+            # # TODO: tune - dense's activation function
+            #
+            # self.logits = tf.squeeze(
+            #         tf.layers.dense(
+            #             inputs=weighted_sum_all_feature,
+            #             units=1,
+            #             activation=None,
+            #             use_bias=True,
+            #             name="Logits"),
+            #         axis=1)  # (N)
 
-            print("self.weighted all feature shape")
-            print(self.weight_all_feat.get_shape().as_list())
+        # sigmoid logits
+        self.sigmoid_logits = tf.nn.sigmoid(logits)
 
-            # +++ Until here +++
+        # regularization term
+        self.regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-            # +++ Uncomment later +++
-            # self.weight_all_feat = tf.nn.softmax(
-            #     tf.layers.conv1d(inputs=self.all_features,
-            #                      filters=1,
-            #                      kernel_size=1,
-            #                      activation=tf.nn.relu,
-            #                      use_bias=True),
-            #     name="Weight_of_All_Features")
-
-            """
-            logits = tf.squeeze(tf.layers.dense(inputs=all_features,
-                                                units=1,
-                                                activation=tf.nn.relu), axis=1)  # N
-                                                # activation=None), axis=1)
-            """
-
-            # ===== Weighted Sum of Features =====
-            self.weighted_sum_all_feature = tf.reduce_sum(
-                tf.multiply(self.all_features, self.weight_all_feat),  # (N, (T+2), C)
-                axis=2,
-                name="Weighted_Sum_of_All_Features"
-            )  # (N, (T+2))
-
-            print("self.weighted sum all feature shape")
-            print(self.weighted_sum_all_feature.get_shape().as_list())
-
-            # ===== Dense layers: merging from T+2 to 1 =====
-            # ** Output Domain: [-inf, +inf] **
-
-            # TODO: tune - dense's activation function
-
-            self.logits = tf.squeeze(
-                    tf.layers.dense(
-                        inputs=self.weighted_sum_all_feature,
-                        units=1,
-                        activation=None,
-                        use_bias=True,
-                        name="Logits"), 
-                    axis=1)  # (N)
-
-        self.logits_sigmoid = tf.nn.sigmoid(self.logits)
-        print("self.logits_sigmoid shape")
-        print(self.logits_sigmoid.get_shape().as_list())
-
-        # ===== Accuracy =====
-        with tf.name_scope("Accuracy"):
-            self.predict = tf.to_int32(tf.round(tf.nn.sigmoid(self.logits)), name="predicts")
-            self.acc, _ = tf.metrics.accuracy(labels=self.label, predictions=self.predict)
-            tf.summary.scalar("Accuracy", self.acc)
-
-        # ===== ADD OTHER METRICS HERE =====
-
-        """
-        if label is set: cross entropy loss
-        else: upper half positive and lower half negative, use subtract
-        """
-        regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-        self.reg_term = regularization_loss
-
-        print("label shape: Unknown")
-        # print(self.label.get_shape().as_list())
-        print("logits shape")
-        print(self.logits.get_shape().as_list())
-
+        # mean loss
         with tf.name_scope("Mean_loss"):
             self.loss = tf.add(
                 tf.reduce_sum(
                     tf.nn.sigmoid_cross_entropy_with_logits(
                         labels=self.label,
-                        logits=self.logits,
-                        name="training_loss_label")),
-                self.regularization_weight * regularization_loss,
-                name="training_loss_label_reg"
+                        logits=logits,
+                        name="Cross_Entropy_Loss")),
+                self.regularization_weight * self.regularization_loss,
+                name="Overall_Loss"
             )
 
             self.mean_loss = tf.divide(self.loss,
                                        tf.to_float(self.batch_size),
-                                       name="mean_loss_label_reg")
+                                       name="Mean_Loss")
 
             tf.summary.scalar("Mean_Loss", self.mean_loss)
 

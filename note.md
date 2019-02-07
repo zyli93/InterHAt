@@ -146,3 +146,9 @@ NV_GPU=1 nvidia-docker run -it --rm -v /local2/zyli/InterpRecSys:/workspace/Inte
 
 5. who used Criteo: DeepFM, xDeepFM, DCN PNN
     have emailed all four group of researchers about this issue.
+   
+
+# Some thing to find out later
+1. local param and global param difference
+2. what is batch normalization
+3. what is a correct way to use accuracy in TensorFlow

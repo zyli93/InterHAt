@@ -9,10 +9,6 @@ from utils import create_folder_tree, evaluate_metrics
 
 flags = tf.app.flags
 
-# TODO: Drop out!
-# TODO: number of neuron's each layer
-# TODO: what is batch norm? Do Batch Norm Somewhere. `Batch Norm Decay`
-
 # Run time
 flags.DEFINE_integer('epoch', 300, 'Number of Epochs.')
 flags.DEFINE_integer('batch_size', 64, 'Number of training instance per batch.')
@@ -40,6 +36,7 @@ flags.DEFINE_integer('random_seed', 2018, 'Random Seed.')
 flags.DEFINE_integer('num_block', 2, 'Number of blocks of Multi-head Attention.')
 flags.DEFINE_integer('num_head', 8, 'Number of heads of Multi-head Attention.')
 flags.DEFINE_boolean('scale_embedding', True, 'Boolean. Whether scale the embeddings.')
+flags.DEFINE_integer('pool_filter_size', 32, 'Size of pooling filter.')
 
 # Options
 flags.DEFINE_boolean('use_graph', True, 'Whether use graph information.')
@@ -48,12 +45,10 @@ flags.DEFINE_boolean('load_recent', True, 'Whether to load most recent model.')
 
 FLAGS = flags.FLAGS
 
-
 def run_model(data_loader,
               model,
               epochs=None,
               load_recent=False):
-    # TODO: add load_recent
     """
     Run model (fit/predict)
     
@@ -61,148 +56,90 @@ def run_model(data_loader,
     :param model:
     :param epochs:
     :param is_training: True - Training; False - Evaluation.
-    :return: 
+    :return:
+
+    TODO: add load_recent
     """
 
     # ===== Saver for saving & loading =====
+
     saver = tf.train.Saver(max_to_keep=10)
 
     # ===== Configurations of runtime environment =====
+
     config = tf.ConfigProto(
-        allow_soft_placement=True
-        # , log_device_placement=True
+        allow_soft_placement=True,
+        log_device_placement=True
     )
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
 
     # ===== Run Everything =====
-    """
-    available outcomes:
-        - predict
-        - accuracy
-        - loss
-    """
+
     # set dir for runtime log
     log_dir = os.path.join(Constant.LOG_DIR, FLAGS.dataset, "train_" + FLAGS.trial_id)
 
+    # create session
     sess = tf.Session(config=config)
 
+    # training
     with sess.as_default():
-
-        # training
         # ===== Initialization of params =====
+
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
-        # TODO: what are local/global variables? what do initializers do?
 
         # ===== Create TensorBoard Logger ======
+
         train_writer = tf.summary.FileWriter(logdir=log_dir, graph=sess.graph)
 
         for epoch in range(epochs):
-
             data_loader.has_next = True
 
             while data_loader.has_next:
+                print("epoch-{:d} batch-{:d} global_step-{:d}"
+                      .format(epoch,
+                              data_loader.batch_index,
+                              sess.run(model.global_step)))
 
-                print("Epoch {:d}".format(epoch))
-                print("Batch ID: {}".format(data_loader.batch_index))
-                print("\tRunning Step {}".format(sess.run(model.global_step)))
-
+                # get batch
                 batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
-
                 batch_label = batch_label.squeeze()
 
-                feed_dict = {
-                    model.X_ind: batch_ind,
-                    model.X_val: batch_val,
-                    model.label: batch_label,
-                    model.is_training: True
-                }
-
-                op, summary_merged, \
-                mean_loss, acc, pred, \
-                all_feat, logits, \
-                reg, loss_term, lgt_sigmoid, \
-                lac, waf, wasf = sess.run(
-                    fetches=[model.train_op,
-                             model.merged,
-                             model.mean_loss,
-                             model.acc,
-                             model.predict,
-                             model.all_features,
-                             model.logits,
-                             model.reg_term,
-                             model.loss,
-                             model.logits_sigmoid,
-                             model.linear_act_conv1d,
-                             model.weight_all_feat,
-                             model.weighted_sum_all_feature
-                             ],
-                    feed_dict=feed_dict
+                # run training operation
+                op, summary_merged,  = sess.run(
+                    fetches=[
+                        model.train_op,
+                        model.merged,
+                    ],
+                    feed_dict={
+                        model.X_ind: batch_ind,
+                        model.X_val: batch_val,
+                        model.label: batch_label,
+                        model.is_training: True
+                    }
                 )
-                """
-                print("concat all feat")
-                print(all_feat.shape)
-                # print(caf)
 
-                # print("conv1d + softmax results")
-                # print(waf.shape)
-                # print(waf)
+                # print performance
+                # early stopping
+                # TODO
 
-                print("linear conv1d activation")
-                print(lac)
-
-                print("Lac after softmax: weight")
-                print(waf)
-
-                print("weight sum results")
-                print(wasf.shape)
-                print(wasf)
-                """
-
-                print("dense results")
-                print(logits.shape)
-                print(logits)
-                """
-
-                print("[Logits Sigmoid]")
-                print(lgt_sigmoid)
-
-                """
-                print("[Predictions]")
-                print(pred.shape)
-                print(pred)
-
-                print("[Label]")
-                print(batch_label)
-
-                """
-                print("[Mean Loss]")
-                print(mean_loss)
-
-                print("[Regularizaiton Term]")
-                print(reg)
-                """
-
-                print("[Loss Term]")
-                print(loss_term)
-                print()
-                # print("labels shape")
-                # print(batch_label.shape)
-
+                # save model
                 if sess.run(model.global_step) % FLAGS.num_iter_per_save == 0:
-                    print("\tSaving CKPT at Global Step [{}]!".format(sess.run(model.global_step)))
+                    print("\tSaving Checkpoint at global step [{}]!".format(sess.run(model.global_step)))
                     saver.save(sess,
                                save_path=log_dir,
                                global_step=model.global_step.eval())
 
+                # run evaluation
+
                 train_writer.add_summary(summary_merged,
                                          global_step=sess.run(model.global_step))
 
-    print("end")
+    print("Training finished!")
 
-def run_evaluation(data_loader,
-                   model):
+
+def run_evaluation(data_loader, model):
     """
     Run Testing
 
@@ -274,6 +211,7 @@ def main(argv):
             regularization_weight=FLAGS.regularization_weight,
             random_seed=Constant.RANDOM_SEED,
             scale_embedding=FLAGS.scale_embedding,
+            pool_filter_size=FLAGS.pool_filter_size,
             merge_feat_channel=FLAGS.merge_feat_channel
         )
 

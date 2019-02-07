@@ -35,7 +35,7 @@ def single_attention(queries,
                             dtype=tf.float32,
                             shape=(T * C),
                             initializer=initializer,
-                            regularizer=regularizer)  # TODO: good initializer
+                            regularizer=regularizer)
 
         # b: C
         b = tf.get_variable(name="single_attn_bias",
@@ -52,32 +52,43 @@ def single_attention(queries,
                             initializer=initializer,
                             regularizer=regularizer)
 
-        # a_i = h^T RELU(W outer(Q, K[i]) + b)
+        """
+        Math equation of a_i
+            a_i = h^T . RELU(W * outer(Q, K[i]) + b)
+        """
 
-        # compute attention factor: outer(Q, K[i])
-        # kq_outer = tf.multiply(keys, tf.reshape(queries, shape=[1, 1, C]))  # (N, T, C)
-        # kq_outer = tf.multiply(keys, queries)  # (N, T, C)
-        kq_outer = tf.reshape(tf.multiply(keys, queries), shape=[-1, T * C])  # (N, T * C)
+        # outer(Q, K[i])
 
-        # RELU(W outer(Q, k[i]) + b)
-        # lin_activ = tf.nn.relu(tf.matmul(kq_outer, W)) + tf.reshape(b, (1, 1, -1))  # (N, T, C)
-        lin_activ = tf.nn.relu(
-            tf.reshape(tf.multiply(kq_outer, W), [-1, T, C])  # (N, T, C)
-            + tf.reshape(b, (1, 1, -1))  # (1, 1, C)
+        kq_outer = tf.reshape(
+            tf.multiply(keys, queries),
+            shape=[-1, T * C]
+        )  # (N, T * C)
+
+        # relu(W * outer(Q, k[i]) + b)
+
+        linear_activation = tf.nn.relu(
+            tf.reshape(
+                tf.multiply(kq_outer, W),
+                shape=[-1, T, C])  # (N, T, C)
+            + tf.reshape(
+                b,
+                shape=[1, 1, -1])  # (1, 1, C)
         )   # (N, T, C)
 
-        # h^T RELU(W outer(Q, k[i]) + b)
-        h_ = tf.reshape(h, shape=[1, 1, C])
-        attention_factor = tf.reduce_sum(tf.multiply(lin_activ, h_), axis=-1)  # (N, T)
+        # h^T relu (W * outer(Q, k[i]) + b)
 
-        attention_factor = tf.expand_dims(attention_factor, axis=1)  # (N, T) to (N, 1, T)
+        h_ = tf.reshape(h, shape=[1, 1, C])
+        attention_factor = tf.reduce_sum(
+            tf.multiply(linear_activation, h_),
+            axis=-1
+        )  # (N, T)
+
+        attention_factor = tf.expand_dims(
+            attention_factor,
+            axis=1
+        )  # (N, T) to (N, 1, T)
+
         weighted_value = tf.matmul(attention_factor, values)
 
     return weighted_value
-
-
-
-
-
-
 

@@ -95,9 +95,40 @@ class Config:
             ]
 
         elif self.dataset == "criteoDAC":
-            self.CAT_COL = ["C{:02}".format(x) for x in range(1, 26)]
-            self.NUM_COL = ["I{:02}".format(x) for x in range(1, 13)]
-            self.IGN_COL = []
+            self.CAT_COL = [x for x in range(14, 40)]
+            self.NUM_COL = [x for x in range(1, 14)]
+            self.IGN_COL = [16, 17, 25, 29, 34]
+
+        elif self.dataset == "avazu":
+            self.CAT_COL = [
+               "ad_id",
+               "label",
+               "hour",
+               "C1",
+               "categorical",
+               "variable",
+               "banner_pos",
+               "site_id",
+               "site_domain",
+               "site_category",
+               "app_id",
+               "app_domain",
+               "app_category",
+               "device_id",
+               "device_ip",
+               "device_model",
+               "device_type",
+               "device_conn_type"] + \
+               ["C{}".format(str(x)) for x in range(14, 22)]
+
+            self.NUM_COL = []
+
+            self.IGN_COL = [
+                "device_ip",
+                "device_id",
+                "id"
+            ]
+
 
         else:
              raise ValueError("Invalid dataset {}".format(dataset))

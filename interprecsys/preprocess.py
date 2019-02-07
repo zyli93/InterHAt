@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
 
 from const import Constant, Config
 from build_entity_graph import load_graph
@@ -111,19 +112,26 @@ def parse_criteo(ratio=(8, 1, 1)):
     input_file = "criteoDAC/train.txt"
     input_dir = Constant.RAW_DIR + input_file
 
-    col_I = ['I_{:02d}'.format(x) for x in range(1, 14)]
-    col_C = ['C_{:02d}'.format(x) for x in range(1, 27)]
-    criteo_colulms = ['label'] + col_I + col_C
+    exceptions = [16, 17, 25, 29, 34]
+    cat_col = [x for x in range(14, 40)]
+    num_col = [x for x in range(1, 14)]
+    criteo_columns = ['label'] + num_col + cat_col
 
     print("Preprocessing criteo dataset ...")
 
     # load dataset
     print("\tLoading dataset ...")
-    df = pd.read_csv(input_dir, sep="\t", names=criteo_colulms)
+    df = pd.read_csv(input_dir, header=None, sep="\t", names=criteo_columns)
+
+    # drop columns
+    df = df.drop(exceptions, axis=1)
 
     # fix missing value
     print("\tFixing missing values ...")
     df = _fix_missing_values(df)
+
+    print("\tNormalizing numerical features ...")
+    df = _normalizing_numerical(df, num_col)
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test dataset ...")
@@ -145,26 +153,8 @@ def parse_avazu(ratio=(8, 1, 1)):
     input_file = "avazu/train"
     input_dir = Constant.RAW_DIR + input_file
 
-    cols = [
-        "ad_id",
-        "label",
-        "hour",
-        "C1",
-        "categorical",
-        "variable",
-        "banner_pos",
-        "site_id",
-        "site_domain",
-        "site_category",
-        "app_id",
-        "app_domain",
-        "app_category",
-        "device_id",
-        "device_ip",
-        "device_model",
-        "device_type",
-        "device_conn_type",
-    ] + ["C{}".format(str(x)) for x in range(14, 22)]
+
+    exceptions = ["device_id", "device_ip", "id"]
 
     print("Preprocessing avazu dataset ...")
 
@@ -172,7 +162,12 @@ def parse_avazu(ratio=(8, 1, 1)):
     print("\tLoading dataset ...")
     df = pd.read_csv(input_dir)
 
-    # fix missing value
+    # fix missing value -- no missing value
+
+    # drop columns
+    df = df.drop(Config("avazu").IGN_COL, axis=1)
+
+    # normalizing features -- no numerical cols
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test Dataset ...")
@@ -297,6 +292,12 @@ def _save_splits(splits, dataset):
         fout.write("{} {}".format(splits[3].feat_dim, splits[0][0].shape[1]))
 
     # TODO: select column to discard
+
+
+def _normalizing_numerical(df, num_col):
+    mms = MinMaxScaler(feature_range=(0, 1))
+    df[num_col] = mms.fit_transform(df[num_col])
+    return df
 
 
 if __name__ == "__main__":
