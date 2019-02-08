@@ -243,8 +243,6 @@ def _split_train_validation_test(df, ratio):
         df_train_val,
         test_size=(ratio[1]/(sum(ratio[:2]))))
 
-    print(type(df_train))
-
     return df_train, df_val, df_test
 
 
@@ -258,10 +256,6 @@ def _split_ind_val_label(dataset, df_train, df_test, df_val):
     df_train_split = feat_dict.parse(df=df_train)
     df_test_split = feat_dict.parse(df=df_test)
     df_val_split = feat_dict.parse(df=df_val)
-
-    print(df_train_split[0].columns)
-    print(df_test_split[0].columns)
-    print(df_val_split[0].columns)
 
     return df_train_split, df_val_split, df_test_split, feat_dict
 

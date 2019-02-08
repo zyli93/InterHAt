@@ -1,8 +1,9 @@
 import tensorflow as tf
 
-import os
+import os, sys
 from data_loader import DataLoader
 from const import Constant
+from sklearn.metrics import roc_auc_score
 
 from model import Interprecsys, InterprecsysBase
 from utils import create_folder_tree, evaluate_metrics
@@ -68,8 +69,8 @@ def run_model(data_loader,
     # ===== Configurations of runtime environment =====
 
     config = tf.ConfigProto(
-        allow_soft_placement=True,
-        log_device_placement=True
+        allow_soft_placement=True
+        # , log_device_placement=True
     )
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
@@ -106,11 +107,20 @@ def run_model(data_loader,
                 batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
                 batch_label = batch_label.squeeze()
 
+
+                # TODO early stopping
+
                 # run training operation
-                op, summary_merged,  = sess.run(
+                op, merged_summary, \
+                reg_loss, mean_logloss, \
+                overall_loss, sigmoid_logits = sess.run(
                     fetches=[
                         model.train_op,
                         model.merged,
+                        model.regularization_loss,
+                        model.mean_logloss,
+                        model.overall_loss,
+                        model.sigmoid_logits,
                     ],
                     feed_dict={
                         model.X_ind: batch_ind,
@@ -120,21 +130,34 @@ def run_model(data_loader,
                     }
                 )
 
-                # print performance
-                # early stopping
-                # TODO
+
+                # compute auc
+                try:
+                    auc = roc_auc_score(batch_label.astype(np.int32), 
+                                        sigmoid_logits)
+                except:
+                    auc = 0.00
+
+                # TODO: write either write file or print out
+                
+                # print results
+                print("\tlogloss:{:.6f}, regloss:{:.6f}, AUC:{:.6f}"
+                        .format(mean_logloss, reg_loss, auc))
 
                 # save model
-                if sess.run(model.global_step) % FLAGS.num_iter_per_save == 0:
-                    print("\tSaving Checkpoint at global step [{}]!".format(sess.run(model.global_step)))
+                if sess.run(model.global_step) \
+                        % FLAGS.num_iter_per_save == 0:
+                    print("\tSaving Checkpoint at global step [{}]!"
+                            .format(sess.run(model.global_step)))
                     saver.save(sess,
                                save_path=log_dir,
                                global_step=model.global_step.eval())
 
                 # run evaluation
-
-                train_writer.add_summary(summary_merged,
-                                         global_step=sess.run(model.global_step))
+                train_writer.add_summary(
+                    merged_summary,
+                    global_step=sess.run(model.global_step)
+                )
 
     print("Training finished!")
 
@@ -178,15 +201,18 @@ def run_evaluation(data_loader, model):
             model.is_training: False
         }
 
-        predict = sess.run(
+        reg_loss, mean_logloss, \
+        overall_loss, sigmoid_logits = sess.run(
             [model.predict],
             feed_dict=feed_dict
         )
-        grd_truth = sess.run(model.label)
         auc, logloss = evaluate_metrics(y_true=grd_truth,
                                         y_predict=predict)
 
         # TODO: what's next?
+        auc = roc_auc_score(label.astype(np.int32), sigmoid_logits)
+        print("\tlogloss:{:.6f}, regloss:{:.6f}, AUC:{:.6f}"
+                .format(mean_logloss, reg_loss, auc))
 
 
 def main(argv):
@@ -216,7 +242,10 @@ def main(argv):
         )
 
     # ===== Model training =====
-    run_model(data_loader=dl, model=model, epochs=FLAGS.epoch, load_recent=FLAGS.load_recent)
+    run_model(data_loader=dl, 
+              model=model, 
+              epochs=FLAGS.epoch, 
+              load_recent=FLAGS.load_recent)
 
     # ===== Model Testing ======
     # run_evaluation(data_loader=dl, model=model)

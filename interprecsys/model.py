@@ -43,7 +43,7 @@ class Interprecsys:
 
     def reg_placeholders_variables(self):
         """
-        Register all placeholders/trainable_params needed later.
+        Register all placeholders/trainable_params ne],
 
         :return: None
         """
@@ -131,15 +131,23 @@ class InterprecsysBase:
         # variables [None]
         self.embedding_lookup = None
         self.emb = None  # raw features
+        self.attn = tf.get_variable(
+            name="attention_factors",
+            shape=self.pool_filter_size,
+            initializer=tf.contrib.layers.xavier_initializer(),
+            dtype=tf.float32)
+
 
         # placeholders
         self.X_ind, self.X_val, self.label = None, None, None
         self.is_training = None
 
         # ports to the outside
-        self.loss, self.mean_loss = None, None
+        self.sigmoid_logits = None
         self.regularization_loss = None
-        self.predict, self.acc = None, None
+        self.logloss, self.mean_logloss = None, None
+        self.overall_loss = None
+
 
         # train/summary operations
         self.train_op, self.merged = None, None
@@ -163,10 +171,18 @@ class InterprecsysBase:
 
         # Define input
         with tf.name_scope("input_ph"):
-            self.X_ind = tf.placeholder(dtype=tf.int32, shape=[None, self.field_size], name="X_index")
-            self.X_val = tf.placeholder(dtype=tf.float32, shape=[None, self.field_size], name="X_value")
-            self.label = tf.placeholder(dtype=tf.float32, shape=None, name="label")
-            self.is_training = tf.placeholder(dtype=tf.bool, shape=(), name="is_training")
+            self.X_ind = tf.placeholder(dtype=tf.int32, 
+                                        shape=[None, self.field_size], 
+                                        name="X_index")
+            self.X_val = tf.placeholder(dtype=tf.float32, 
+                                        shape=[None, self.field_size], 
+                                        name="X_value")
+            self.label = tf.placeholder(dtype=tf.float32, 
+                                        shape=[None],
+                                        name="label")
+            self.is_training = tf.placeholder(dtype=tf.bool, 
+                                              shape=(), 
+                                              name="is_training")
 
         # lookup and process embedding
         with tf.name_scope("embedding"):
@@ -194,7 +210,7 @@ class InterprecsysBase:
             for i_block in range(self.num_block):
                 with tf.variable_scope("attn_head_{}".format(str(i_block))) as scope:
                     # multihead attention
-                    features = multihead_attention(queries=features,
+                    features, _ = multihead_attention(queries=features,
                                                    keys=features,
                                                    num_units=self.embedding_dim,
                                                    num_heads=self.num_head,
@@ -205,12 +221,15 @@ class InterprecsysBase:
 
                     # feed forward
                     features = feedforward(inputs=features,
-                                           num_units=[4 * self.embedding_dim, self.embedding_dim],
+                                           num_units=[4 * self.embedding_dim, 
+                                                      self.embedding_dim],
                                            scope="feed_forward")  # (N, T, C)
 
         # build third order cross
         with tf.name_scope("Third_order") as scope:
-            second_cross = tf.layers.conv1d(inputs=tf.transpose(features, [0, 2, 1]),  # transpose: (N, C, T)
+            second_cross = tf.layers.conv1d(inputs=tf.transpose(
+                                                features, [0, 2, 1]),  
+                                                # transpose: (N, C, T)
                                             filters=1,
                                             kernel_size=1,
                                             activation=tf.nn.relu,
@@ -231,55 +250,56 @@ class InterprecsysBase:
                 [self.emb, second_cross, third_cross],
                 axis=1, name="concat_feature")  # (N, (T+2), C)
 
+            # # Version 2
             # ===== Generate weights of all features =====
 
             # column wise Conv-1D, ReLU, and Softmax (sum up to one)
             # TODO: can be relu+softmax, or direct softmax
-            self.feature_weights = tf.nn.softmax(
-                tf.layers.conv1d(inputs=all_features,
-                                 filters=1,
-                                 kernel_size=1,
-                                 activation=tf.nn.relu,
-                                 use_bias=True),  # (N, (T+2), 1)
-                name="Feature_attentive_weights"
-            )  # (N, (T+2), 1)
+            # self.feature_weights = tf.nn.softmax(
+            #     tf.layers.conv1d(inputs=all_features,
+            #                      filters=1,
+            #                      kernel_size=1,
+            #                      activation=tf.nn.relu,
+            #                      use_bias=True),  # (N, (T+2), 1)
+            #     name="Feature_attentive_weights"
+            # )  # (N, (T+2), 1)
 
-            # condense features with pooling - feature abstracts
-            condense_feature = tf.layers.max_pooling1d(
-                tf.layers.conv1d(
-                    input=all_features,
-                    filters=self.pool_filter_size,
-                    kernel_size=1,
-                    activation=tf.nn.relu,
-                    use_bias=True
-                ),  # (N, (T+2), pool_filter_size)
-                name="Feature_abstracts"
-            )  # (N, (T+2), 1)
+            # # condense features with pooling - feature abstracts
+            # condense_feature = tf.reduce_max(
+            #     tf.layers.conv1d(inputs=all_features,
+            #                      filters=self.pool_filter_size,
+            #                      kernel_size=1,
+            #                      activation=tf.nn.relu,
+            #                      use_bias=True),  # (N, (T+2), pf_size)
+            #     axis=2,
+            #     name="Feature_abstracts"
+            # )  # (N, (T+2), 1)
 
-            # predictions in terms of logits
-            logits = tf.reduce_sum(
-                tf.multiply(
-                    tf.squeeze(self.feature_weights),
-                    tf.squeeze(condense_feature)
-                ),  # (N, T+2)
-                axis=1,
-                name="Logits"
-            )  # (N)
+            # # predictions in terms of logits
+            # logits = tf.reduce_sum(
+            #     tf.multiply(
+            #         tf.squeeze(self.feature_weights),
+            #         condense_feature
+            #     ),  # (N, T+2)
+            #     axis=1,
+            #     name="Logits"
+            # )  # (N)
 
-            # # ===== Weighted Sum of Features =====
-            #
+            # Version 1
+            # ===== Weighted Sum of Features =====
+             
             # weighted_sum_all_feature = tf.reduce_sum(
             #     tf.multiply(all_features,
             #                self.feature_weights),  # (N, (T+2), C)
             #     axis=2,
             #     name="Weighted_Sum_of_All_Features"
             # )  # (N, (T+2))
-            #
-            # # ===== Dense layers: merging from T+2 to 1 =====
-            #
-            # # TODO: tune - dense's activation function
-            #
-            # self.logits = tf.squeeze(
+            # 
+            #  # ===== Dense layers: merging from T+2 to 1 =====
+            # 
+            #  # TODO: tune - dense's activation function
+            # 
+            # logits = tf.squeeze(
             #         tf.layers.dense(
             #             inputs=weighted_sum_all_feature,
             #             units=1,
@@ -288,29 +308,109 @@ class InterprecsysBase:
             #             name="Logits"),
             #         axis=1)  # (N)
 
+        # Version 3
+        # map C to pool_filter_size dimension
+        mapped_all_feature = tf.layers.conv1d(
+            inputs=all_features,
+            filters=self.pool_filter_size,
+            kernel_size=1,
+            use_bias=True,
+            name="Mapped_all_feature"
+        )  # (N, T+2, pf_size)
+        
+
+        # apply context vector
+        feature_weights = tf.nn.softmax(
+            tf.squeeze(
+                tf.layers.dense(
+                    mapped_all_feature,
+                    units=1,
+                    activation=None,
+                    use_bias=False
+                ),  # (N, T+2, 1),
+                [2]
+            ), # (N, T+2)
+        )  # (N, T+2)
+        
+        # weighted sum
+        weighted_sum_feat = tf.reduce_sum(
+            tf.multiply(
+                all_features,
+                tf.expand_dims(feature_weights, axis=2),
+            ),  # (N, T+2, C)
+            axis=[1],
+            name="Attn_weighted_sum_feature"
+        )  # (N, C)
+        
+        # last non-linear
+        hidden_logits = tf.layers.dense(
+            weighted_sum_feat,
+            units=self.embedding_dim // 2,
+            activation=tf.nn.relu,
+            use_bias=False,
+            name="HiddenLogits"
+        )  # (N, C/2)
+
+        # the last dense for logits
+        logits = tf.squeeze(
+            tf.layers.dense(
+                hidden_logits,
+                units=1,
+                activation=None,
+                use_bias=False,
+                name="Logits"
+            ),  # (N, 1)
+            axis=[1]
+        )  # (N,)
+
+        # Generate Logits here
+
         # sigmoid logits
         self.sigmoid_logits = tf.nn.sigmoid(logits)
 
         # regularization term
-        self.regularization_loss = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+        self.regularization_loss = tf.reduce_sum(
+                tf.get_collection(
+                    tf.GraphKeys.REGULARIZATION_LOSSES)) \
+                * self.regularization_weight
 
+        # sum logloss
+        print("label shape", self.label.get_shape())
+        print("logit shape", logits.shape)
+        self.logloss = tf.reduce_sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=tf.expand_dims(self.label, -1),
+                logits=tf.expand_dims(logits, -1),
+                name="SumLogLoss"))
+        # mean logloss
+        self.mean_logloss = tf.divide(self.logloss,
+                                   tf.to_float(self.batch_size),
+                                   name="MeanLogLoss")
+
+        # overall loss
+        self.overall_loss = tf.add(
+            self.mean_logloss,
+            self.regularization_loss,
+            name="OverallLoss"
+        )
+        
         # mean loss
-        with tf.name_scope("Mean_loss"):
-            self.loss = tf.add(
-                tf.reduce_sum(
-                    tf.nn.sigmoid_cross_entropy_with_logits(
-                        labels=self.label,
-                        logits=logits,
-                        name="Cross_Entropy_Loss")),
-                self.regularization_weight * self.regularization_loss,
-                name="Overall_Loss"
-            )
+        # with tf.name_scope("Mean_loss"):
+        #     self.loss = tf.add(
+        #         tf.reduce_sum(
+        #             tf.nn.sigmoid_cross_entropy_with_logits(
+        #                 labels=self.label,
+        #                 logits=logits,
+        #                 name="Cross_Entropy_Loss")),
+        #         self.regularization_loss,
+        #         name="Overall_Loss"
+        #     )
 
-            self.mean_loss = tf.divide(self.loss,
-                                       tf.to_float(self.batch_size),
-                                       name="Mean_Loss")
 
-            tf.summary.scalar("Mean_Loss", self.mean_loss)
+        tf.summary.scalar("Mean_LogLoss", self.mean_logloss)
+        tf.summary.scalar("Reg_Loss", self.regularization_loss)
+        tf.summary.scalar("Overall_Loss", self.overall_loss)
 
-        self.train_op = self.optimizer.minimize(self.mean_loss, global_step=self.global_step)
+        self.train_op = self.optimizer.minimize(self.overall_loss, 
+                                                global_step=self.global_step)
         self.merged = tf.summary.merge_all()
