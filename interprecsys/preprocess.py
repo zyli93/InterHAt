@@ -291,7 +291,7 @@ def _normalizing_numerical(df, num_col):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 1 + 2:
+    if len(sys.argv) < 1 + 1:
         sys.exit("format: python preprocess.py [dataset]")
 
     dataset = sys.argv[1]
