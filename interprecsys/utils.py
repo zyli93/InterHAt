@@ -1,8 +1,10 @@
 """
 Util functions
 """
+
 import os
 import sys
+from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -91,3 +93,27 @@ def evaluate_metrics(y_true, y_predict):
     lloss = log_loss(y_true=y_true, y_pred=y_predict)
 
     return auc, lloss
+
+
+def build_msg(stage,
+              epoch,
+              iteration=None,
+              global_step=None,
+              logloss=None,
+              regloss=None,
+              auc=None):
+    # build msg
+    time = datetime.now().isoformat()[:24]
+    msg = ("[{},{}] epoch:{} iter:{} global_step:{} logloss:{:.6f} "
+           "regloss:{:.6f} AUC:{:.6f}"
+           .format(stage,
+                   time,
+                   epoch,
+                   iteration if iteration else "NONE",
+                   global_step if global_step else "NONE",
+                   logloss,
+                   regloss if regloss else 0.0,
+                   auc)
+           )
+
+    return msg

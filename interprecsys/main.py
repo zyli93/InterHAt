@@ -2,11 +2,12 @@ import tensorflow as tf
 
 import os, sys
 from data_loader import DataLoader
+import numpy as np
 from const import Constant
 from sklearn.metrics import roc_auc_score
 
 from model import Interprecsys, InterprecsysBase
-from utils import create_folder_tree, evaluate_metrics
+from utils import create_folder_tree, evaluate_metrics, build_msg
 
 flags = tf.app.flags
 
@@ -17,7 +18,6 @@ flags.DEFINE_string('dataset', 'example', 'Name of the dataset.')
 flags.DEFINE_integer('num_iter_per_save', 100, 'Number of iterations per save.')
 
 # Optimization
-# flags.DEFINE_string('activation', 'relu', 'Activation Layer: relu/')  # TODO: more activation
 flags.DEFINE_float('learning_rate', 0.001, 'Learning Rate.')
 flags.DEFINE_float('l2_reg', 0.01, 'Weight of L2 Regularizations.')
 
@@ -86,9 +86,9 @@ def run_model(data_loader,
 
     # training
     with sess.as_default(), \
-        open("./performance/" 
-                + FLAGS.dataset  + "."
-                + FLAGS.trial_id + ".pref", "w") as performance_writer:
+        open("./performance/"
+             + FLAGS.dataset + "."
+             + FLAGS.trial_id + ".pref", "w") as performance_writer:
 
         # ===== Initialization of params =====
 
@@ -99,30 +99,19 @@ def run_model(data_loader,
 
         train_writer = tf.summary.FileWriter(logdir=log_dir, graph=sess.graph)
         
-        # performance_writer = open("./performance/" 
-        #                           + FLAGS.dataset  + "."
-        #                           + FLAGS.trial_id + ".pref", "w")
-
         for epoch in range(epochs):
             data_loader.has_next = True
 
             while data_loader.has_next:
-               #  print("epoch-{:d} batch-{:d} global_step-{:d}"
-               #        .format(epoch,
-               #                data_loader.batch_index,
-               #                sess.run(model.global_step)))
 
                 # get batch
                 batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
                 batch_label = batch_label.squeeze()
 
-
-                # TODO early stopping
-
                 # run training operation
-                op, merged_summary, \
-                reg_loss, mean_logloss, \
-                overall_loss, sigmoid_logits = sess.run(
+                op, merged_summary, reg_loss, \
+                mean_logloss, overall_loss, \
+                sigmoid_logits = sess.run(
                     fetches=[
                         model.train_op,
                         model.merged,
@@ -142,31 +131,24 @@ def run_model(data_loader,
                 # print results and write to file
                 if sess.run(model.global_step) \
                         % 100 == 0:
+
                     # get AUC
                     try:
-                        auc = roc_auc_score(
-                                batch_label.astype(np.int32), 
-                                sigmoid_logits)
+                        auc = roc_auc_score(batch_label.astype(np.int32),
+                                            sigmoid_logits)
                     except:
                         auc = 0.00
                     
-                    # build msg
-                    msg = (
-                            "epoch:{} iter:{} global_step:{} "
-                            "logloss:{:.6f} "
-                            "regloss:{:.6f} "
-                            "AUC:{:.6f}"
-                            .format(
-                                epoch,
-                                data_loader.batch_index,
-                                sess.run(model.global_step),
-                                mean_logloss, 
-                                reg_loss, 
-                                auc)
-                            )
+                    msg = build_msg(stage="Trn",
+                                    epoch=epoch,
+                                    iteration=data_loader.batch_index,
+                                    global_step=sess.run(model.global_step),
+                                    logloss=mean_logloss,
+                                    regloss=reg_loss,
+                                    auc=auc)
                     
                     # write to file
-                    performance_writer.write(msg + "\n")
+                    print(msg, file=performance_writer)
 
                     # print performance every 1000 batches
                     if sess.run(model.global_step) % 1000 == 0:
@@ -176,102 +158,77 @@ def run_model(data_loader,
                 if sess.run(model.global_step) \
                         % FLAGS.num_iter_per_save == 0:
                     print("\tSaving Checkpoint at global step [{}]!"
-                            .format(sess.run(model.global_step)))
+                          .format(sess.run(model.global_step)))
                     saver.save(sess,
                                save_path=log_dir,
-                               global_step=model.global_step.eval())
-            
-                 # run evaluation
+                               global_step=sess.run(model.global_step))
+
+                # add tensorboard summary
                 train_writer.add_summary(
                     merged_summary,
                     global_step=sess.run(model.global_step)
                 )
 
-            # run validation
-            val_ind, val_val, val_label = data_loader.generate_val_ivl()
-            val_sigmoid_logits, val_mean_logloss = sess.run(
-                fetches=[
-                    model.sigmoid_logits,
-                    model.mean_logloss
-                ],
-                feed_dict={
-                    model.batch_ind: val_ind,
-                    model.batch_val: val_val,
-                    model.batch_label: val_label,
-                    model.is_training: False
-                }
-            )
+            # run validation set
+            epoch_msg = run_evaluation(sess=sess,
+                                       data_loader=data_loader,
+                                       epoch=epoch,
+                                       model=model)
 
-            # TODO: see whether to squeeze the label
-            # TODO: cast label to integer
-            # TODO: print epoch validation performance
-            # TODO: add timestamp in running time
-            # TODO: write a util func for printing
-            # TODO: [vim] fix jedi
-            # TODO: [vim] fix comment sign jump to the first
-            # TODO: maybe print out tensorboard
-            # TODO: reimplement train-validation-test set
+            print(epoch_msg)
+            print(epoch_msg, file=performance_writer)
 
-            epoch_msg = (
-                "epoch:{} finished! validation
-            # TODO
-
+        # run test set, with validation=False
+        training_msg = run_evaluation(sess=sess,
+                                      data_loader=data_loader,
+                                      model=model,
+                                      validation=False)
+        print(training_msg)
+        print(training_msg, file=performance_writer)
 
     print("Training finished!")
 
 
 # DEPRECATED
-def run_evaluation(data_loader, model):
+def run_evaluation(sess, data_loader, model,
+                   epoch=None,
+                   validation=True):
     """
-    Run Testing
-
-    :param data_loader:
-    :param model:
+    Run validation or testing
     :return:
     """
-
-    # ===== Saver for saving & loading =====
-    saver = tf.train.Saver(max_to_keep=10)
-
-    # ===== Configurations of runtime environment =====
-    config = tf.ConfigProto(
-        allow_soft_placement=True,
-        log_device_placement=True
-    )
-    config.gpu_options.allow_growth = True
-    config.gpu_options.per_process_gpu_memory_fraction = 0.8
-
-    # ===== Run Everything =====
-    # set dir for runtime log
-    log_suffix = "test"
-    log_dir = os.path.join(Constant.LOG_DIR, FLAGS.dataset, log_suffix)
-
-    with tf.Session(config) as sess:
-        # evaluation
-        latest_ckpt_path = tf.train.latest_checkpoint(checkpoint_dir=log_dir)
-        saver.restore(sess=sess, save_path=latest_ckpt_path)
-
+    if validation:
+        ind, val, label = data_loader.generate_val_ivl()
+    else:
         ind, val, label = data_loader.generate_test_ivl()
 
-        feed_dict = {
-            model.X_ind: ind,
-            model.X_val: val,
-            model.label: label,
+    label = label.squeeze()
+    print("Run evaluation label size", label.shape)
+
+    sigmoid_logits, mean_logloss = sess.run(
+        fetches=[
+            model.sigmoid_logits,
+            model.mean_logloss
+        ],
+        feed_dict={
+            model.batch_ind: ind,
+            model.batch_val: val,
+            model.batch_label: label,
             model.is_training: False
         }
+    )
 
-        reg_loss, mean_logloss, \
-        overall_loss, sigmoid_logits = sess.run(
-            [model.predict],
-            feed_dict=feed_dict
-        )
-        auc, logloss = evaluate_metrics(y_true=grd_truth,
-                                        y_predict=predict)
+    auc = roc_auc_score(label.astype(np.int32), sigmoid_logits)
 
-        # TODO: what's next?
-        auc = roc_auc_score(label.astype(np.int32), sigmoid_logits)
-        print("\tlogloss:{:.6f}, regloss:{:.6f}, AUC:{:.6f}"
-                .format(mean_logloss, reg_loss, auc))
+    msg = build_msg(
+        stage="Vld" if validation else "Tst",
+        epoch=epoch if epoch else 999,
+        global_step=sess.run(model.global_step),
+        logloss=mean_logloss,
+        auc=auc
+    )
+
+    return msg
 
 
 def main(argv):
@@ -301,18 +258,12 @@ def main(argv):
             merge_feat_channel=FLAGS.merge_feat_channel
         )
 
-    # ===== Model training =====
+    # ===== Run everything =====
     run_model(data_loader=dl, 
               model=model, 
               epochs=FLAGS.epoch, 
               load_recent=FLAGS.load_recent)
 
-    # ===== Model Testing ======
-    # run_evaluation(data_loader=dl, model=model)
-
 
 if __name__ == '__main__':
-    # to be deleted later
-    import numpy as np
-    np.set_printoptions(threshold=np.nan)
     tf.app.run()

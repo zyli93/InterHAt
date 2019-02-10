@@ -103,11 +103,10 @@ def parse_features(infile, dataset):
     print("Parsed Features has been saved in {}".format(output_path))
 
 
-def parse_criteo(ratio=(8, 1, 1)):
+def parse_criteo():
     """
     parse dataset criteoDAC
 
-    ratio: (train_prop, validation_prop, test_prop)
     """
     input_file = "criteoDAC/train.txt"
     input_dir = Constant.RAW_DIR + input_file
@@ -135,7 +134,7 @@ def parse_criteo(ratio=(8, 1, 1)):
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test dataset ...")
-    df_train, df_val, df_test = _split_train_validation_test(df, ratio)
+    df_train, df_val, df_test = _split_train_validation_test(df)
 
     # split ind, val, and label
     print("\tSplitting Index, Value, and Labels ...")
@@ -149,7 +148,7 @@ def parse_criteo(ratio=(8, 1, 1)):
     _save_splits(full_splits, dataset="criteoDAC")
 
 
-def parse_avazu(ratio=(8, 1, 1)):
+def parse_avazu():
     input_file = "avazu/train"
     input_dir = Constant.RAW_DIR + input_file
 
@@ -171,7 +170,7 @@ def parse_avazu(ratio=(8, 1, 1)):
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test Dataset ...")
-    df_train, df_val, df_test = _split_train_validation_test(df, ratio)
+    df_train, df_val, df_test = _split_train_validation_test(df)
 
     # split ind, val, and test
     print("\tSplitting Index, Value, and Labels ...")
@@ -185,7 +184,7 @@ def parse_avazu(ratio=(8, 1, 1)):
     _save_splits(full_splits, dataset="avazu")
 
 
-def parse_safe_driver(ratio=(8, 1, 1)):
+def parse_safe_driver():
     dataset = "safedriver"
     input_file = "safedriver/train.csv"
     input_dir = Constant.RAW_DIR + input_file
@@ -200,7 +199,7 @@ def parse_safe_driver(ratio=(8, 1, 1)):
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test Dataset ...")
-    df_train, df_val, df_test = _split_train_validation_test(df, ratio)
+    df_train, df_val, df_test = _split_train_validation_test(df)
 
     # split ind, val, and test
     print("\tSplitting Index, Value, and Labels ...")
@@ -228,20 +227,19 @@ def _fix_missing_values(df):
     return df
 
 
-def _split_train_validation_test(df, ratio):
+def _split_train_validation_test(df):
     """
-    split train, validation, test set by ratio. Using `train_test_split` twice.
+    split train, validation, test set.
+    Using `train_test_split` twice.
     """
-    if len(ratio) != 3:
-        raise ValueError("Length of [ratio] should be 3.")
 
     df_train_val, df_test = train_test_split(
         df,
-        test_size=(ratio[2]/sum(ratio)))
+        test_size=0.1)
 
     df_train, df_val = train_test_split(
         df_train_val,
-        test_size=(ratio[1]/(sum(ratio[:2]))))
+        test_size=0.1)
 
     return df_train, df_val, df_test
 
@@ -285,8 +283,6 @@ def _save_splits(splits, dataset):
         # feature size field size
         fout.write("{} {}".format(splits[3].feat_dim, splits[0][0].shape[1]))
 
-    # TODO: select column to discard
-
 
 def _normalizing_numerical(df, num_col):
     mms = MinMaxScaler(feature_range=(0, 1))
@@ -296,17 +292,16 @@ def _normalizing_numerical(df, num_col):
 
 if __name__ == "__main__":
     if len(sys.argv) < 1 + 2:
-        sys.exit("format: python preprocess.py [dataset] [ratio]")
+        sys.exit("format: python preprocess.py [dataset]")
 
     dataset = sys.argv[1]
-    ratio = tuple([int(x) for x in sys.argv[2]])
 
     if dataset == "criteo":
-        parse_criteo(ratio)
+        parse_criteo()
     elif dataset == "avazu":
-        parse_avazu(ratio)
+        parse_avazu()
     elif dataset == "safedriver":
-        parse_safe_driver(ratio)
+        parse_safe_driver()
     elif dataset == "movielens":
         raise NotImplementedError("To Be Implemented.")
     else:
