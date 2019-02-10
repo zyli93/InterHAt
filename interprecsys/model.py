@@ -406,7 +406,6 @@ class InterprecsysBase:
         #         name="Overall_Loss"
         #     )
 
-
         tf.summary.scalar("Mean_LogLoss", self.mean_logloss)
         tf.summary.scalar("Reg_Loss", self.regularization_loss)
         tf.summary.scalar("Overall_Loss", self.overall_loss)

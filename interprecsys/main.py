@@ -44,6 +44,7 @@ flags.DEFINE_boolean('use_graph', True, 'Whether use graph information.')
 flags.DEFINE_string('nct_neg_sample_method', 'uniform', 'Non click-through negative sampling method.')
 flags.DEFINE_boolean('load_recent', True, 'Whether to load most recent model.')
 
+
 FLAGS = flags.FLAGS
 
 def run_model(data_loader,
@@ -84,7 +85,11 @@ def run_model(data_loader,
     sess = tf.Session(config=config)
 
     # training
-    with sess.as_default():
+    with sess.as_default(), \
+        open("./performance/" 
+                + FLAGS.dataset  + "."
+                + FLAGS.trial_id + ".pref", "w") as performance_writer:
+
         # ===== Initialization of params =====
 
         sess.run(tf.local_variables_initializer())
@@ -93,15 +98,19 @@ def run_model(data_loader,
         # ===== Create TensorBoard Logger ======
 
         train_writer = tf.summary.FileWriter(logdir=log_dir, graph=sess.graph)
+        
+        # performance_writer = open("./performance/" 
+        #                           + FLAGS.dataset  + "."
+        #                           + FLAGS.trial_id + ".pref", "w")
 
         for epoch in range(epochs):
             data_loader.has_next = True
 
             while data_loader.has_next:
-                print("epoch-{:d} batch-{:d} global_step-{:d}"
-                      .format(epoch,
-                              data_loader.batch_index,
-                              sess.run(model.global_step)))
+               #  print("epoch-{:d} batch-{:d} global_step-{:d}"
+               #        .format(epoch,
+               #                data_loader.batch_index,
+               #                sess.run(model.global_step)))
 
                 # get batch
                 batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
@@ -130,19 +139,38 @@ def run_model(data_loader,
                     }
                 )
 
+                # print results and write to file
+                if sess.run(model.global_step) \
+                        % 100 == 0:
+                    # get AUC
+                    try:
+                        auc = roc_auc_score(
+                                batch_label.astype(np.int32), 
+                                sigmoid_logits)
+                    except:
+                        auc = 0.00
+                    
+                    # build msg
+                    msg = (
+                            "epoch:{} iter:{} global_step:{} "
+                            "logloss:{:.6f} "
+                            "regloss:{:.6f} "
+                            "AUC:{:.6f}"
+                            .format(
+                                epoch,
+                                data_loader.batch_index,
+                                sess.run(model.global_step),
+                                mean_logloss, 
+                                reg_loss, 
+                                auc)
+                            )
+                    
+                    # write to file
+                    performance_writer.write(msg + "\n")
 
-                # compute auc
-                try:
-                    auc = roc_auc_score(batch_label.astype(np.int32), 
-                                        sigmoid_logits)
-                except:
-                    auc = 0.00
-
-                # TODO: write either write file or print out
-                
-                # print results
-                print("\tlogloss:{:.6f}, regloss:{:.6f}, AUC:{:.6f}"
-                        .format(mean_logloss, reg_loss, auc))
+                    # print performance every 1000 batches
+                    if sess.run(model.global_step) % 1000 == 0:
+                        print(msg)
 
                 # save model
                 if sess.run(model.global_step) \
@@ -152,16 +180,47 @@ def run_model(data_loader,
                     saver.save(sess,
                                save_path=log_dir,
                                global_step=model.global_step.eval())
-
-                # run evaluation
+            
+                 # run evaluation
                 train_writer.add_summary(
                     merged_summary,
                     global_step=sess.run(model.global_step)
                 )
 
+            # run validation
+            val_ind, val_val, val_label = data_loader.generate_val_ivl()
+            val_sigmoid_logits, val_mean_logloss = sess.run(
+                fetches=[
+                    model.sigmoid_logits,
+                    model.mean_logloss
+                ],
+                feed_dict={
+                    model.batch_ind: val_ind,
+                    model.batch_val: val_val,
+                    model.batch_label: val_label,
+                    model.is_training: False
+                }
+            )
+
+            # TODO: see whether to squeeze the label
+            # TODO: cast label to integer
+            # TODO: print epoch validation performance
+            # TODO: add timestamp in running time
+            # TODO: write a util func for printing
+            # TODO: [vim] fix jedi
+            # TODO: [vim] fix comment sign jump to the first
+            # TODO: maybe print out tensorboard
+            # TODO: reimplement train-validation-test set
+
+            epoch_msg = (
+                "epoch:{} finished! validation
+            # TODO
+
+
     print("Training finished!")
 
 
+# DEPRECATED
 def run_evaluation(data_loader, model):
     """
     Run Testing
@@ -219,6 +278,7 @@ def main(argv):
 
     create_folder_tree(FLAGS.dataset)
 
+    print("loading dataset ...")
     dl = DataLoader(dataset=FLAGS.dataset,
                     batch_size=FLAGS.batch_size)
 

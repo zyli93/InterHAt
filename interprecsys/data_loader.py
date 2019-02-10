@@ -71,7 +71,9 @@ class DataLoader:
         data_dir = Constant.PARSE_DIR + self.dataset + "/"
         for trm in terms:
             ret_sets.append(
-                pd.read_csv(data_dir + "{}_{}.csv".format(usage, trm), header=None).values
+                pd.read_csv(
+                    data_dir + 
+                    "{}_{}.csv".format(usage, trm), header=None).values
             )
 
         return ret_sets
@@ -94,7 +96,7 @@ class DataLoader:
     def generate_test_ivl(self):
         return self.test_ind, self.test_val, self.test_label
 
-    def generate_val(self):
+    def generate_val_ivl(self):
         return self.val_ind, self.val_val, self.val_label
 
     def load_statistics(self):
@@ -166,6 +168,8 @@ class FeatureDictionary(object):
             y_col_name = "label"
         elif 'target' in dfi.columns:
             y_col_name = "target"
+        elif 'click' in dfi.columns:
+            y_col_name = "click"
         else:
             raise KeyError("Cannot find [label] or [target] column in the dataset.")
 

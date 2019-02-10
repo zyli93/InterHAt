@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-CUDA_VISIBLE_DEVICES=$1
 python interprecsys/main.py \
-    --trial_id $2 \
+    --trial_id $1 \
     --epoch 20 \
     --batch_size 256 \
     --dataset "criteoDAC" \
     --use_graph=False \
-    --num_iter_per_save 2000 \
+    --num_iter_per_save 5000 \
     --scale_embedding=False \
-    --regularization_weight 0.0 \
+    --regularization_weight 0.01 \
     --embedding_size 128

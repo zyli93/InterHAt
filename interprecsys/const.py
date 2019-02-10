@@ -1,7 +1,7 @@
 """
 Constants file for InterpRecSys
 
-@Author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
+Author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
 """
 
 import os
@@ -101,12 +101,8 @@ class Config:
 
         elif self.dataset == "avazu":
             self.CAT_COL = [
-               "ad_id",
-               "label",
                "hour",
                "C1",
-               "categorical",
-               "variable",
                "banner_pos",
                "site_id",
                "site_domain",
@@ -114,8 +110,6 @@ class Config:
                "app_id",
                "app_domain",
                "app_category",
-               "device_id",
-               "device_ip",
                "device_model",
                "device_type",
                "device_conn_type"] + \
