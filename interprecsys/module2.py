@@ -1,17 +1,16 @@
 import tensorflow as tf
 
 
-def single_attention(queries,
-                     keys,
-                     values,
-                     scope,
-                     reuse=None,
-                     regularize=False,
-                     regularize_scale=0.1
-                     ):
+def recur_attention(queries,
+                    keys,
+                    values,
+                    scope,
+                    reuse=None,
+                    regularize_scale=None,
+                    ):
     """Single attention
 
-    :param queries: 1-D Tensor, shape=[C], query vector
+    :param queries: 2-D Tensor, shape=[N, C], query vector
     :param keys: 3-D Tensor, shape=[N, T, C], key tensor
     :param values: 3-D Tensor, shape=[N, T, C], value tensor
     :param scope:
@@ -22,7 +21,7 @@ def single_attention(queries,
     """
     _, T, C = keys.get_shape().as_list()
 
-    if regularize:
+    if regularize_scale:
         regularizer = tf.contrib.layers.l2_regularizer(scale=regularize_scale)
     else:
         regularizer = None
@@ -31,7 +30,7 @@ def single_attention(queries,
 
     with tf.variable_scope(scope, reuse=reuse):
         # W: T * C
-        W = tf.get_variable(name="single_attn_weight",
+        W = tf.get_variable(name="prev_order_cross",
                             dtype=tf.float32,
                             shape=(T * C),
                             initializer=initializer,
@@ -40,7 +39,7 @@ def single_attention(queries,
         # b: C
         b = tf.get_variable(name="single_attn_bias",
                             dtype=tf.float32,
-                            shape=C,
+                            shape=(C),
                             initializer=initializer,
                             regularizer=regularizer)
 
@@ -48,7 +47,7 @@ def single_attention(queries,
         # h: C
         h = tf.get_variable(name="single_attn_h",
                             dtype=tf.float32,
-                            shape=C,
+                            shape=(C),
                             initializer=initializer,
                             regularizer=regularizer)
 
@@ -60,7 +59,9 @@ def single_attention(queries,
         # outer(Q, K[i])
 
         kq_outer = tf.reshape(
-            tf.multiply(keys, queries),
+            tf.multiply(keys,  # [N, T, C]
+                        tf.expand_dims(queries, axis=1)  # [N, 1, C]
+                        ),  # [N, T, C]
             shape=[-1, T * C]
         )  # (N, T * C)
 
@@ -91,4 +92,63 @@ def single_attention(queries,
         weighted_value = tf.matmul(attention_factor, values)
 
     return weighted_value
+
+
+def agg_attention(query,
+                  keys,
+                  values,
+                  attention_size,
+                  regularize_scale=None):
+    """
+
+    :param query: [a_s]
+    :param keys: [N, T, dim]
+    :param values: [N, T, dim]
+    :param attention_size: [attn_size]
+    :param regularize_scale:
+    :return:
+    """
+    if regularize_scale:
+        regularizer = tf.contrib.layers.l2_regularizer(scale=regularize_scale)
+    else:
+        regularizer=None
+
+    # project keys to attention space
+    projected_keys = tf.layers.dense(keys, attention_size,
+                                     activation=tf.nn.relu,
+                                     kernel_regularizer=regularizer,
+                                     bias_regularizer=regularizer)  # [N, T, a_s]
+
+    # reshape query
+    query_ = tf.reshape(query, [1, 1, -1])  # [1, 1, a_s]
+
+    # multiply query_, keys (broadcast)
+    attention_energy = tf.reduce_sum(
+        tf.multiply(projected_keys, query_),  # [N, T, a_s]
+        axis=2
+    )  # [N, T]
+
+    # generate attention weights
+    attentions = tf.nn.softmax(logits=attention_energy,
+                               name="attention")  # [N, T]
+
+    results = tf.reduce_sum(
+        tf.multiply(values,
+                    tf.expand_dims(attentions, axis=1)),  # [N, T, dim]
+        axis=1
+    )  # [N, dim]
+
+    return results, attentions
+
+
+
+
+
+
+
+
+
+
+
+
 

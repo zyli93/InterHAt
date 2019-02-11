@@ -10,7 +10,7 @@ import tensorflow as tf
 
 from const import Constant
 from modules import multihead_attention, feedforward, embedding
-from module2 import single_attention
+from module2 import recur_attention, agg_attention
 
 
 class Interprecsys:
@@ -205,43 +205,87 @@ class InterprecsysBase:
                                          rate=self.dropout_rate,
                                          training=self.is_training)
 
-        # multi-layer, multi-head attention
-        with tf.name_scope("Multilayer_attn"):
-            for i_block in range(self.num_block):
-                with tf.variable_scope("attn_head_{}".format(str(i_block))) as scope:
-                    # multihead attention
-                    features, _ = multihead_attention(queries=features,
-                                                   keys=features,
-                                                   num_units=self.embedding_dim,
-                                                   num_heads=self.num_head,
-                                                   dropout_rate=self.dropout_rate,
-                                                   causality=False,
-                                                   is_training=self.is_training,
-                                                   scope="multihead_attn")
+        # multi-layer, multi-head attention, Version 1
+        # with tf.name_scope("Multilayer_attn"):
+        #     for i_block in range(self.num_block):
+        #         with tf.variable_scope("attn_head_{}".format(str(i_block))) as scope:
+        #             # multihead attention
+        #             features, _ = multihead_attention(queries=features,
+        #                                            keys=features,
+        #                                            num_units=self.embedding_dim,
+        #                                            num_heads=self.num_head,
+        #                                            dropout_rate=self.dropout_rate,
+        #                                            is_training=self.is_training,
+        #                                            scope="multihead_attn")
+        #
+        #             # feed forward
+        #             features = feedforward(inputs=features,
+        #                                    num_units=[4 * self.embedding_dim,
+        #                                               self.embedding_dim],
+        #                                    scope="feed_forward")  # (N, T, C)
+        # End of version 1
 
-                    # feed forward
-                    features = feedforward(inputs=features,
-                                           num_units=[4 * self.embedding_dim, 
-                                                      self.embedding_dim],
-                                           scope="feed_forward")  # (N, T, C)
+        # multi-layer, multi-head attention Version 2
+        # major difference: remove multi-block
+        with tf.name_scope("Multilayer_attn"):
+            with tf.variable_scope("attention_head") as scope:
+                features, _ = multihead_attention(
+                    queries=features,
+                    keys=features,
+                    num_units=self.embedding_dim*2,
+                    num_heads=self.num_head,
+                    dropout_rate=self.dropout_rate,
+                    is_training=self.is_training,
+                    scope="multihead_attention"
+                )
+
+                features = feedforward(
+                    inputs=features,
+                    num_units=[4 * self.embedding_dim,
+                               self.embedding_dim],
+                    scope="feed_forward"
+                )
+
+        # build second order cross
+        with tf.name_scope("Second_order") as scope:
+            # second_cross = tf.layers.conv1d(inputs=tf.transpose(
+            #     features, [0, 2, 1]),
+            #     # transpose: (N, C, T)
+            #     filters=1,
+            #     kernel_size=1,
+            #     activation=tf.nn.relu,
+            #     use_bias=True)  # (N, C, 1)
+
+            second_cross_context = tf.get_variable(
+                name="second_cross_attn_context",
+                shape=(self.embedding_dim),
+                dtype=tf.float32
+            )
+
+            # generate second cross features
+            # the _ is heat (attentions)
+            # TODO: remove regularization weight in the end
+            second_cross, _ = agg_attention(
+                query=second_cross_context,
+                keys=features,
+                values=features,
+                attention_size=self.embedding_dim,
+                regularize_scale=self.regularization_weight
+            )  # [N, dim]=[N, C]
+
+            print("second_cross dim", second_cross.get_shape())
 
         # build third order cross
         with tf.name_scope("Third_order") as scope:
-            second_cross = tf.layers.conv1d(inputs=tf.transpose(
-                                            features, [0, 2, 1]),  
-                                                # transpose: (N, C, T)
-                                            filters=1,
-                                            kernel_size=1,
-                                            activation=tf.nn.relu,
-                                            use_bias=True)  # (N, C, 1)
+            # second_cross = tf.transpose(second_cross, [0, 2, 1])  # (N, 1, C), old
+            second_cross = tf.expand_dims(second_cross, axis=1)  # [N, 1, C]
 
-            second_cross = tf.transpose(second_cross, [0, 2, 1])  # (N, 1, C)
-
-            third_cross = single_attention(queries=second_cross,
-                                           keys=self.emb,
-                                           values=self.emb,
-                                           scope="single_attn",
-                                           regularize=True)  # (N, 1, C)
+            # old
+            third_cross = recur_attention(queries=second_cross,
+                                          keys=self.emb,
+                                          values=self.emb,
+                                          regularize_scale=self.regularization_weight
+                                          )  # (N, 1, C)
 
         with tf.name_scope("Merged_features"):
 
@@ -318,7 +362,6 @@ class InterprecsysBase:
             name="Mapped_all_feature"
         )  # (N, T+2, pf_size)
         
-
         # apply context vector
         feature_weights = tf.nn.softmax(
             tf.squeeze(
@@ -369,10 +412,10 @@ class InterprecsysBase:
         self.sigmoid_logits = tf.nn.sigmoid(logits)
 
         # regularization term
-        self.regularization_loss = tf.reduce_sum(
-                tf.get_collection(
-                    tf.GraphKeys.REGULARIZATION_LOSSES)) \
-                * self.regularization_weight
+        # self.regularization_loss = tf.reduce_sum(
+        #         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)) \
+        #         * self.regularization_weight
+        self.regularization_loss = tf.losses.get_regularization_loss()
 
         # sum logloss
         print("label shape", self.label.get_shape())
@@ -382,10 +425,15 @@ class InterprecsysBase:
                 labels=tf.expand_dims(self.label, -1),
                 logits=tf.expand_dims(logits, -1),
                 name="SumLogLoss"))
+
+        # mean logloss [old]
+        # self.mean_logloss = tf.divide(self.logloss,
+        #                            tf.to_float(self.batch_size),
+        #                            name="MeanLogLoss")
+
         # mean logloss
-        self.mean_logloss = tf.divide(self.logloss,
-                                   tf.to_float(self.batch_size),
-                                   name="MeanLogLoss")
+        self.mean_logloss = tf.reduce_mean(self.logloss,
+                                           name="MeanLogLoss")
 
         # overall loss
         self.overall_loss = tf.add(

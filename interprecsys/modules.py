@@ -181,7 +181,7 @@ def multihead_attention(queries,
     Args:
       queries: A 3d tensor with shape of [N, T_q, C_q].
       keys: A 3d tensor with shape of [N, T_k, C_k].
-      num_units: A scalar. Attention size.
+      num_units: A scalar. Attention size, the C
       dropout_rate: A floating point number.
       is_training: Boolean. Controller of mechanism for dropout.
       num_heads: An int. Number of heads.
