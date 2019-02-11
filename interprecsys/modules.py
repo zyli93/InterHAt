@@ -174,7 +174,6 @@ def multihead_attention(queries,
                         num_heads=8, 
                         dropout_rate=0,
                         is_training=True,
-                        causality=False,
                         scope="multihead_attention", 
                         reuse=None):
     '''Applies multihead attention.
@@ -185,7 +184,6 @@ def multihead_attention(queries,
       num_units: A scalar. Attention size.
       dropout_rate: A floating point number.
       is_training: Boolean. Controller of mechanism for dropout.
-      causality: Boolean. If true, units that reference the future are masked. 
       num_heads: An int. Number of heads.
       scope: Optional scope for `variable_scope`.
       reuse: Boolean, whether to reuse the weights of a previous layer
@@ -222,15 +220,6 @@ def multihead_attention(queries,
         
         paddings = tf.ones_like(outputs)*(-2**32+1)
         outputs = tf.where(tf.equal(key_masks, 0), paddings, outputs) # (h*N, T_q, T_k)
-  
-        # Causality = Future blinding
-        if causality:
-            diag_vals = tf.ones_like(outputs[0, :, :]) # (T_q, T_k)
-            tril = tf.contrib.linalg.LinearOperatorTriL(diag_vals).to_dense() # (T_q, T_k)
-            masks = tf.tile(tf.expand_dims(tril, 0), [tf.shape(outputs)[0], 1, 1]) # (h*N, T_q, T_k)
-   
-            paddings = tf.ones_like(masks)*(-2**32+1)
-            outputs = tf.where(tf.equal(masks, 0), paddings, outputs) # (h*N, T_q, T_k)
   
         # Activation
         outputs = tf.nn.softmax(outputs) # (h*N, T_q, T_k)

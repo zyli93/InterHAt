@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-python interprecsys/main.py \
+python3 interprecsys/main.py \
     --trial_id $1 \
     --epoch 20 \
     --batch_size 256 \

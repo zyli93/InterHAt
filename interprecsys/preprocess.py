@@ -235,11 +235,11 @@ def _split_train_validation_test(df):
 
     df_train_val, df_test = train_test_split(
         df,
-        test_size=0.1)
+        test_size=0.005)
 
     df_train, df_val = train_test_split(
         df_train_val,
-        test_size=0.1)
+        test_size=0.005)
 
     return df_train, df_val, df_test
 

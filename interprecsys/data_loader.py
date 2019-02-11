@@ -151,8 +151,8 @@ class FeatureDictionary(object):
         self.feat_dim = tc
 
         # * Debug *
-        with open("feat_dict_debug", "wb") as fout:
-            pickle.dump(self, fout)
+        # with open("feat_dict_debug", "wb") as fout:
+        #     pickle.dump(self, fout)
 
     def parse(self, df=None):
 

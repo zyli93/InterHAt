@@ -228,7 +228,7 @@ class InterprecsysBase:
         # build third order cross
         with tf.name_scope("Third_order") as scope:
             second_cross = tf.layers.conv1d(inputs=tf.transpose(
-                                                features, [0, 2, 1]),  
+                                            features, [0, 2, 1]),  
                                                 # transpose: (N, C, T)
                                             filters=1,
                                             kernel_size=1,

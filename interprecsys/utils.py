@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from sklearn.metrics import jaccard_similarity_score
@@ -50,22 +50,22 @@ def activation_options(activation_func):
 
 
 # ===== Plotting =====
-def plot_fig(train_results, valid_results, model_name):
-    colors = ["red", "blue", "green"]
-    xs = np.arange(1, train_results.shape[1] + 1)
-    plt.figure()
-    legends = []
-    for i in range(train_results.shape[0]):
-        plt.plot(xs, train_results[i], color=colors[i], linestyle="solid", marker="o")
-        plt.plot(xs, valid_results[i], color=colors[i], linestyle="dashed", marker="o")
-        legends.append("train-%d" % (i + 1))
-        legends.append("valid-%d" % (i + 1))
-    plt.xlabel("Epoch")
-    plt.ylabel("Normalized Gini")
-    plt.title("%s" % model_name)
-    plt.legend(legends)
-    plt.savefig("fig/%s.png" % model_name)
-    plt.close()
+# def plot_fig(train_results, valid_results, model_name):
+#     colors = ["red", "blue", "green"]
+#     xs = np.arange(1, train_results.shape[1] + 1)
+#     plt.figure()
+#     legends = []
+#     for i in range(train_results.shape[0]):
+#         plt.plot(xs, train_results[i], color=colors[i], linestyle="solid", marker="o")
+#         plt.plot(xs, valid_results[i], color=colors[i], linestyle="dashed", marker="o")
+#         legends.append("train-%d" % (i + 1))
+#         legends.append("valid-%d" % (i + 1))
+#     plt.xlabel("Epoch")
+#     plt.ylabel("Normalized Gini")
+#     plt.title("%s" % model_name)
+#     plt.legend(legends)
+#     plt.savefig("fig/%s.png" % model_name)
+#     plt.close()
 
 
 def create_folder_tree(dataset):

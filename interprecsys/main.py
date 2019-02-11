@@ -189,7 +189,6 @@ def run_model(data_loader,
     print("Training finished!")
 
 
-# DEPRECATED
 def run_evaluation(sess, data_loader, model,
                    epoch=None,
                    validation=True):
@@ -211,9 +210,9 @@ def run_evaluation(sess, data_loader, model,
             model.mean_logloss
         ],
         feed_dict={
-            model.batch_ind: ind,
-            model.batch_val: val,
-            model.batch_label: label,
+            model.X_ind: ind,
+            model.X_val: val,
+            model.label: label,
             model.is_training: False
         }
     )
