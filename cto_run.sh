@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export CUDA_VISIBLE_DEVICES=6,7
 python3 interprecsys/main.py \
     --trial_id $1 \
     --epoch 20 \

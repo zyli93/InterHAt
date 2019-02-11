@@ -1,6 +1,5 @@
 import tensorflow as tf
 
-
 def recur_attention(queries,
                     keys,
                     values,
@@ -13,12 +12,11 @@ def recur_attention(queries,
     :param queries: 2-D Tensor, shape=[N, C], query vector
     :param keys: 3-D Tensor, shape=[N, T, C], key tensor
     :param values: 3-D Tensor, shape=[N, T, C], value tensor
-    :param scope:
-    :param reuse:
     :param regularize: Boolean. Do regularization or not.
     :param regularize_scale: float
     :return:
     """
+    print("query shape", queries.get_shape())
     _, T, C = keys.get_shape().as_list()
 
     if regularize_scale:
@@ -57,23 +55,24 @@ def recur_attention(queries,
         """
 
         # outer(Q, K[i])
+        print("keys shape", keys.get_shape())
 
         kq_outer = tf.reshape(
-            tf.multiply(keys,  # [N, T, C]
-                        tf.expand_dims(queries, axis=1)  # [N, 1, C]
-                        ),  # [N, T, C]
+            # [N, T, C] mult [N, 1, C]
+            tf.multiply(keys, queries), # [N, T, C]
             shape=[-1, T * C]
         )  # (N, T * C)
+
+        print("kq_outer shape", kq_outer.get_shape())
 
         # relu(W * outer(Q, k[i]) + b)
 
         linear_activation = tf.nn.relu(
             tf.reshape(
-                tf.multiply(kq_outer, W),
-                shape=[-1, T, C])  # (N, T, C)
-            + tf.reshape(
-                b,
-                shape=[1, 1, -1])  # (1, 1, C)
+                tf.multiply(kq_outer, 
+                            tf.expand_dims(W, axis=0)),  # [N, T*C]
+                shape=[-1, T, C])  # [N, T, C]
+            + tf.reshape(b, shape=[1, 1, -1])  # (1, 1, C)
         )   # (N, T, C)
 
         # h^T relu (W * outer(Q, k[i]) + b)
@@ -83,6 +82,8 @@ def recur_attention(queries,
             tf.multiply(linear_activation, h_),
             axis=-1
         )  # (N, T)
+
+        print("attention factor shape", attention_factor.get_shape())
 
         attention_factor = tf.expand_dims(
             attention_factor,
@@ -134,21 +135,10 @@ def agg_attention(query,
 
     results = tf.reduce_sum(
         tf.multiply(values,
-                    tf.expand_dims(attentions, axis=1)),  # [N, T, dim]
+                    tf.expand_dims(attentions, axis=2)),  # [N, T, dim]
         axis=1
     )  # [N, dim]
 
     return results, attentions
-
-
-
-
-
-
-
-
-
-
-
 
 

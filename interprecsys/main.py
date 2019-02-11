@@ -9,6 +9,8 @@ from sklearn.metrics import roc_auc_score
 from model import Interprecsys, InterprecsysBase
 from utils import create_folder_tree, evaluate_metrics, build_msg
 
+os.environ['CUDA_VISIBLE_DEVICES'] = "4,5"
+
 flags = tf.app.flags
 
 # Run time

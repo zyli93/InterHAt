@@ -232,7 +232,7 @@ class InterprecsysBase:
                 features, _ = multihead_attention(
                     queries=features,
                     keys=features,
-                    num_units=self.embedding_dim*2,
+                    num_units=self.embedding_dim,
                     num_heads=self.num_head,
                     dropout_rate=self.dropout_rate,
                     is_training=self.is_training,
@@ -284,6 +284,7 @@ class InterprecsysBase:
             third_cross = recur_attention(queries=second_cross,
                                           keys=self.emb,
                                           values=self.emb,
+                                          scope="third_order",
                                           regularize_scale=self.regularization_weight
                                           )  # (N, 1, C)
 
@@ -427,13 +428,13 @@ class InterprecsysBase:
                 name="SumLogLoss"))
 
         # mean logloss [old]
-        # self.mean_logloss = tf.divide(self.logloss,
-        #                            tf.to_float(self.batch_size),
-        #                            name="MeanLogLoss")
+        self.mean_logloss = tf.divide(self.logloss,
+                                      tf.to_float(self.batch_size),
+                                      name="MeanLogLoss")
 
         # mean logloss
-        self.mean_logloss = tf.reduce_mean(self.logloss,
-                                           name="MeanLogLoss")
+        # self.mean_logloss = tf.reduce_mean(self.logloss,
+        #                                    name="MeanLogLoss")
 
         # overall loss
         self.overall_loss = tf.add(
