@@ -9,8 +9,6 @@ from sklearn.metrics import roc_auc_score
 from model import Interprecsys, InterprecsysBase
 from utils import create_folder_tree, evaluate_metrics, build_msg
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "4,5"
-
 flags = tf.app.flags
 
 # Run time
@@ -206,6 +204,7 @@ def run_evaluation(sess, data_loader, model,
     sigmoid_logits = []
     test_labels = []
     sum_logloss = 0
+
     while True:
         try:
             ind, val, label = next(batch_generator)
@@ -213,10 +212,10 @@ def run_evaluation(sess, data_loader, model,
         except StopIteration:
             break
 
-        batch_sigmoid_logits, batch_mean_logloss = sess.run(
+        batch_sigmoid_logits, batch_logloss = sess.run(
             fetches=[
                 model.sigmoid_logits,
-                model.mean_logloss
+                model.logloss
             ],
             feed_dict={
                 model.X_ind: ind,
@@ -227,14 +226,14 @@ def run_evaluation(sess, data_loader, model,
         )
         sigmoid_logits += batch_sigmoid_logits.tolist()
         test_labels += label.astype(np.int32).tolist()
-        sum_logloss += np.sum(batch_mean_logloss)
-
+        sum_logloss += np.sum(batch_logloss)
+    
     mean_logloss = sum_logloss / len(sigmoid_logits)
     auc = roc_auc_score(test_labels, sigmoid_logits)
 
     msg = build_msg(
         stage="Vld" if validation else "Tst",
-        epoch=epoch if epoch else 999,
+        epoch=epoch if epoch is not None else 999,
         global_step=sess.run(model.global_step),
         logloss=mean_logloss,
         auc=auc

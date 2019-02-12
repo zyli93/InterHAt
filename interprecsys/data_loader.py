@@ -13,9 +13,9 @@ from itertools import product
 import numpy as np
 import pandas as pd
 
+
 from build_entity_graph import load_graph, load_dict, load_nbr_dict
 from const import Constant, Config
-
 DATA_DIR = Constant.PARSE_DIR
 
 
