@@ -1,8 +1,10 @@
 import tensorflow as tf
 
+
 def recur_attention(queries,
                     keys,
                     values,
+                    attention_size,
                     scope,
                     reuse=None,
                     regularize_scale=None,
@@ -10,14 +12,16 @@ def recur_attention(queries,
     """Single attention
 
     :param queries: 2-D Tensor, shape=[N, C], query vector
-    :param keys: 3-D Tensor, shape=[N, T, C], key tensor
-    :param values: 3-D Tensor, shape=[N, T, C], value tensor
+    :param keys: 3-D Tensor, shape=[N, T, emb_size], key tensor
+    :param values: 3-D Tensor, shape=[N, T, emb_size], value tensor
     :param regularize: Boolean. Do regularization or not.
     :param regularize_scale: float
     :return:
     """
     print("query shape", queries.get_shape())
-    _, T, C = keys.get_shape().as_list()
+    # _, T, C = keys.get_shape().as_list()
+    _, T, _ = keys.get_shape().as_list()
+    C = attention_size
 
     if regularize_scale:
         regularizer = tf.contrib.layers.l2_regularizer(scale=regularize_scale)
@@ -26,6 +30,12 @@ def recur_attention(queries,
 
     initializer = tf.contrib.layers.xavier_initializer()
 
+    keys = tf.layers.dense(keys, attention_size,
+                           activation=tf.nn.relu)  # [N, T, a_s]
+    values = tf.layers.dense(values, attention_size,
+                             activation=tf.nn.relu)  # [N, T, a_s]
+
+    # ** Here C = a_s **
     with tf.variable_scope(scope, reuse=reuse):
         # W: T * C
         W = tf.get_variable(name="prev_order_cross",

@@ -30,12 +30,12 @@ flags.DEFINE_float('entity_graph_threshold', 0.5, 'The threshold used when build
 flags.DEFINE_integer('neg_pos_ratio', 3, 'The ratio of negative samples v.s. positive.')
 flags.DEFINE_float('dropout_rate', 0.1, 'The dropout rate of Transformer model.')
 flags.DEFINE_float('regularization_weight', 0.01, 'The weight of L2-regularization.')
-flags.DEFINE_integer('merge_feat_channel', 8, 'Merging feature channels.')
 
 # Structure & Configure
 flags.DEFINE_integer('random_seed', 2018, 'Random Seed.')
 flags.DEFINE_integer('num_block', 2, 'Number of blocks of Multi-head Attention.')
 flags.DEFINE_integer('num_head', 8, 'Number of heads of Multi-head Attention.')
+flags.DEFINE_integer('attention_size', 128, 'Number of hidden units in Multi-head Attention.')
 flags.DEFINE_boolean('scale_embedding', True, 'Boolean. Whether scale the embeddings.')
 flags.DEFINE_integer('pool_filter_size', 32, 'Size of pooling filter.')
 
@@ -46,6 +46,7 @@ flags.DEFINE_boolean('load_recent', True, 'Whether to load most recent model.')
 
 
 FLAGS = flags.FLAGS
+
 
 def run_model(data_loader,
               model,
@@ -260,13 +261,13 @@ def main(argv):
             feature_size=dl.feature_size,
             batch_size=FLAGS.batch_size,
             num_block=FLAGS.num_block,
+            attention_size=FLAGS.attention_size,
             num_head=FLAGS.num_head,
             dropout_rate=FLAGS.dropout_rate,
             regularization_weight=FLAGS.regularization_weight,
             random_seed=Constant.RANDOM_SEED,
             scale_embedding=FLAGS.scale_embedding,
             pool_filter_size=FLAGS.pool_filter_size,
-            merge_feat_channel=FLAGS.merge_feat_channel
         )
 
     # ===== Run everything =====

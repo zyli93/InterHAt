@@ -102,10 +102,10 @@ class InterprecsysBase:
                  , batch_size
                  , num_block
                  , num_head
+                 , attention_size
                  , pool_filter_size
                  , dropout_rate
                  , regularization_weight
-                 , merge_feat_channel
                  , random_seed=Constant.RANDOM_SEED
                  , scale_embedding=False
                  ):
@@ -119,8 +119,8 @@ class InterprecsysBase:
         self.random_seed = random_seed
         self.num_block = num_block  # num of blocks of multi-head attn
         self.num_head = num_head  # num of heads
+        self.attention_size = attention_size
         self.regularization_weight = regularization_weight
-        self.merge_feat_channel = merge_feat_channel
         self.pool_filter_size = pool_filter_size
 
         # training parameters
@@ -147,7 +147,6 @@ class InterprecsysBase:
         self.regularization_loss = None
         self.logloss, self.mean_logloss = None, None
         self.overall_loss = None
-
 
         # train/summary operations
         self.train_op, self.merged = None, None
@@ -232,7 +231,7 @@ class InterprecsysBase:
                 features, _ = multihead_attention(
                     queries=features,
                     keys=features,
-                    num_units=self.embedding_dim,
+                    num_units=self.attention_size*self.num_head,
                     num_heads=self.num_head,
                     dropout_rate=self.dropout_rate,
                     is_training=self.is_training,
@@ -258,18 +257,17 @@ class InterprecsysBase:
 
             second_cross_context = tf.get_variable(
                 name="second_cross_attn_context",
-                shape=(self.embedding_dim),
+                shape=(self.attention_size),
                 dtype=tf.float32
             )
 
             # generate second cross features
             # the _ is heat (attentions)
-            # TODO: remove regularization weight in the end
             second_cross, _ = agg_attention(
                 query=second_cross_context,
                 keys=features,
                 values=features,
-                attention_size=self.embedding_dim,
+                attention_size=self.attention_size,
                 regularize_scale=self.regularization_weight
             )  # [N, dim]=[N, C]
 
