@@ -1,6 +1,5 @@
-#!/usr/bin/env bash
-export CUDA_VISIBLE_DEVICE=4,5
-python3 interprecsys/main.py \
+#!/bin/bash
+CUDA_VISIBLE_DEVICE=4,5 python3 interprecsys/main.py \
     --trial_id $1 \
     --epoch 20 \
     --batch_size 256 \

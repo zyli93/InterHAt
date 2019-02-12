@@ -199,27 +199,38 @@ def run_evaluation(sess, data_loader, model,
     :return:
     """
     if validation:
-        ind, val, label = data_loader.generate_val_ivl()
+        batch_generator = data_loader.generate_val_ivl()
     else:
-        ind, val, label = data_loader.generate_test_ivl()
+        batch_generator = data_loader.generate_test_ivl()
 
-    label = label.squeeze()
-    print("Run evaluation label size", label.shape)
+    sigmoid_logits = []
+    test_labels = []
+    sum_logloss = 0
+    while True:
+        try:
+            ind, val, label = next(batch_generator)
+            label = label.squeeze()
+        except StopIteration:
+            break
 
-    sigmoid_logits, mean_logloss = sess.run(
-        fetches=[
-            model.sigmoid_logits,
-            model.mean_logloss
-        ],
-        feed_dict={
-            model.X_ind: ind,
-            model.X_val: val,
-            model.label: label,
-            model.is_training: False
-        }
-    )
+        batch_sigmoid_logits, batch_mean_logloss = sess.run(
+            fetches=[
+                model.sigmoid_logits,
+                model.mean_logloss
+            ],
+            feed_dict={
+                model.X_ind: ind,
+                model.X_val: val,
+                model.label: label,
+                model.is_training: False
+            }
+        )
+        sigmoid_logits += batch_sigmoid_logits.tolist()
+        test_labels += label.astype(np.int32).tolist()
+        sum_logloss += np.sum(batch_mean_logloss)
 
-    auc = roc_auc_score(label.astype(np.int32), sigmoid_logits)
+    mean_logloss = sum_logloss / len(sigmoid_logits)
+    auc = roc_auc_score(test_labels, sigmoid_logits)
 
     msg = build_msg(
         stage="Vld" if validation else "Tst",

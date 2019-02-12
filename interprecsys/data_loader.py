@@ -94,10 +94,27 @@ class DataLoader:
         return b_ind, b_value, b_label
 
     def generate_test_ivl(self):
-        return self.test_ind, self.test_val, self.test_label
+        bs = self.batch_size
+        batch_count = self.test_size // bs + 1
 
+        for bi in range(batch_count):
+            end_ind = min((bi + 1) * bs, self.test_size)
+            batch_ind = self.test_ind[bs * bi: end_ind]
+            batch_val = self.test_val[bs * bi: end_ind]
+            batch_label = self.test_label[bs * bi: end_ind]
+            yield batch_ind, batch_val, batch_label
+
+    # TODO in later versions: combine test & val
     def generate_val_ivl(self):
-        return self.val_ind, self.val_val, self.val_label
+        bs = self.batch_size
+        batch_count = self.val_size // bs + 1
+
+        for bi in range(batch_count):
+            end_ind = min((bi + 1) * bs, self.val_size)
+            batch_ind = self.val_ind[bs * bi: end_ind]
+            batch_val = self.val_val[bs * bi: end_ind]
+            batch_label = self.val_label[bs * bi: end_ind]
+            yield batch_ind, batch_val, batch_label
 
     def load_statistics(self):
         with open(Constant.PARSE_DIR + "{}/feat_dict".format(self.dataset), "r") as fin:
