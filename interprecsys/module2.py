@@ -18,7 +18,7 @@ def recur_attention(queries,
     :param regularize_scale: float
     :return:
     """
-    print("query shape", queries.get_shape())
+    # print("query shape", queries.get_shape())
     # _, T, C = keys.get_shape().as_list()
     _, T, _ = keys.get_shape().as_list()
     C = attention_size
@@ -32,8 +32,10 @@ def recur_attention(queries,
 
     keys = tf.layers.dense(keys, attention_size,
                            activation=tf.nn.relu)  # [N, T, a_s]
-    values = tf.layers.dense(values, attention_size,
-                             activation=tf.nn.relu)  # [N, T, a_s]
+    # values = tf.layers.dense(values, attention_size,
+    #                          activation=tf.nn.relu)  # [N, T, a_s]
+    queries = tf.layers.dense(queries, attention_size,
+                              activation=tf.nn.relu)  # [N, T, a_s]
 
     # ** Here C = a_s **
     with tf.variable_scope(scope, reuse=reuse):
@@ -65,7 +67,7 @@ def recur_attention(queries,
         """
 
         # outer(Q, K[i])
-        print("keys shape", keys.get_shape())
+        # print("keys shape", keys.get_shape())
 
         kq_outer = tf.reshape(
             # [N, T, C] mult [N, 1, C]
@@ -73,7 +75,7 @@ def recur_attention(queries,
             shape=[-1, T * C]
         )  # (N, T * C)
 
-        print("kq_outer shape", kq_outer.get_shape())
+        # print("kq_outer shape", kq_outer.get_shape())
 
         # relu(W * outer(Q, k[i]) + b)
 
@@ -93,7 +95,7 @@ def recur_attention(queries,
             axis=-1
         )  # (N, T)
 
-        print("attention factor shape", attention_factor.get_shape())
+        # print("attention factor shape", attention_factor.get_shape())
 
         attention_factor = tf.expand_dims(
             attention_factor,

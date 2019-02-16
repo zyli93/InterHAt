@@ -199,10 +199,10 @@ class InterprecsysBase:
         features = self.emb
 
         # apply dropout on embedding
-        with tf.name_scope("dropout"):
-            features = tf.layers.dropout(features,
-                                         rate=self.dropout_rate,
-                                         training=self.is_training)
+        # with tf.name_scope("dropout"):
+        #     features = tf.layers.dropout(features,
+        #                                  rate=self.dropout_rate,
+        #                                  training=self.is_training)
 
         # multi-layer, multi-head attention, Version 1
         # with tf.name_scope("Multilayer_attn"):
@@ -245,6 +245,8 @@ class InterprecsysBase:
                     scope="feed_forward"
                 )
 
+        multihead_features = features
+
         # build second order cross
         with tf.name_scope("Second_order") as scope:
             # second_cross = tf.layers.conv1d(inputs=tf.transpose(
@@ -271,7 +273,7 @@ class InterprecsysBase:
                 regularize_scale=self.regularization_weight
             )  # [N, dim]=[N, C]
 
-            print("second_cross dim", second_cross.get_shape())
+            # print("second_cross dim", second_cross.get_shape())
 
         # build third order cross
         with tf.name_scope("Third_order") as scope:
@@ -282,13 +284,14 @@ class InterprecsysBase:
             third_cross = recur_attention(queries=second_cross,
                                           keys=self.emb,
                                           values=self.emb,
+                                          attention_size=self.attention_size,
                                           scope="third_order",
-                                          regularize_scale=self.regularization_weight
-                                          )  # (N, 1, C)
+                                          regularize_scale=self.regularization_weight)  # (N, 1, C)
 
         with tf.name_scope("Merged_features"):
 
             # concatenate [enc, second_cross, third_cross]
+            # TODO: can + multihead_features
             all_features = tf.concat(
                 [self.emb, second_cross, third_cross],
                 axis=1, name="concat_feature")  # (N, (T+2), C)
@@ -417,8 +420,8 @@ class InterprecsysBase:
         self.regularization_loss = tf.losses.get_regularization_loss()
 
         # sum logloss
-        print("label shape", self.label.get_shape())
-        print("logit shape", logits.shape)
+        # print("label shape", self.label.get_shape())
+        # print("logit shape", logits.shape)
         self.logloss = tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.expand_dims(self.label, -1),

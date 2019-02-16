@@ -37,7 +37,7 @@ flags.DEFINE_integer('num_block', 2, 'Number of blocks of Multi-head Attention.'
 flags.DEFINE_integer('num_head', 8, 'Number of heads of Multi-head Attention.')
 flags.DEFINE_integer('attention_size', 128, 'Number of hidden units in Multi-head Attention.')
 flags.DEFINE_boolean('scale_embedding', True, 'Boolean. Whether scale the embeddings.')
-flags.DEFINE_integer('pool_filter_size', 32, 'Size of pooling filter.')
+flags.DEFINE_integer('pool_filter_size', 64, 'Size of pooling filter.')
 
 # Options
 flags.DEFINE_boolean('use_graph', True, 'Whether use graph information.')
@@ -84,6 +84,8 @@ def run_model(data_loader,
 
     # create session
     sess = tf.Session(config=config)
+
+    print("\n========\nID:{}\n========\n".format(FLAGS.trial_id))
 
     # training
     with sess.as_default(), \
@@ -179,13 +181,24 @@ def run_model(data_loader,
             print(epoch_msg)
             print(epoch_msg, file=performance_writer)
 
+            if epoch > 4:
+                test_msg = run_evaluation(sess=sess,
+                                          data_loader=data_loader,
+                                          epoch=epoch,
+                                          model=model,
+                                          validation=False)
+                print(test_msg)
+                print(test_msg, file=performance_writer)
+
+
+
         # run test set, with validation=False
-        training_msg = run_evaluation(sess=sess,
-                                      data_loader=data_loader,
-                                      model=model,
-                                      validation=False)
-        print(training_msg)
-        print(training_msg, file=performance_writer)
+        # training_msg = run_evaluation(sess=sess,
+        #                               data_loader=data_loader,
+        #                               model=model,
+        #                               validation=False)
+        # print(training_msg)
+        # print(training_msg, file=performance_writer)
 
     print("Training finished!")
 

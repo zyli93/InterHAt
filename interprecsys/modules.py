@@ -196,6 +196,7 @@ def multihead_attention(queries,
         # Set the fall back option for num_units
         if num_units is None:
             num_units = queries.get_shape().as_list[-1]
+        emb_size = keys.get_shape().as_list()[-1]
         
         # Linear projections
         Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu)  # (N, T_q, C)
@@ -240,6 +241,7 @@ def multihead_attention(queries,
         
         # Restore shape
         outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
+        outputs = tf.layers.dense(outputs, emb_size, activation=tf.nn.relu)
               
         # Residual connection
         outputs += queries
