@@ -293,7 +293,10 @@ class InterprecsysBase:
             # concatenate [enc, second_cross, third_cross]
             # TODO: can + multihead_features
             all_features = tf.concat(
-                [self.emb, second_cross, third_cross],
+                [self.emb, 
+                    # multihead_features,
+                    second_cross, 
+                    third_cross],
                 axis=1, name="concat_feature")  # (N, (T+2), C)
 
             # # Version 2
