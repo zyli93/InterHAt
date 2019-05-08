@@ -66,6 +66,12 @@ class InterprecsysBase:
         self.feature_weights = None
         self.sigmoid_logits = None
 
+        # attns
+        self.attn_1, self.attn_2, self.attn_3, self.attn_4, self.attn_5 = \
+        None, None, None, None, None
+
+        self.attn_k = None
+
         # global training steps
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
@@ -165,7 +171,7 @@ class InterprecsysBase:
                 shape=(self.attention_size),
                 dtype=tf.float32)
 
-            agg_feat_1, _ = agg_attention(
+            agg_feat_1, self.attn_1 = agg_attention(
                 query=ctx_order_1,
                 keys=features,
                 values=features,
@@ -189,7 +195,7 @@ class InterprecsysBase:
                 dtype=tf.float32
                 )
 
-            agg_feat_2, _ = agg_attention(
+            agg_feat_2, self.attn_2 = agg_attention(
                 query=ctx_order_2,
                 keys=feat_2,
                 values=feat_2,
@@ -212,7 +218,7 @@ class InterprecsysBase:
                 dtype=tf.float32
                 )
 
-            agg_feat_3, _ = agg_attention(
+            agg_feat_3, self.attn_3 = agg_attention(
                 query=ctx_order_3,
                 keys=feat_3,
                 values=feat_3,
@@ -234,7 +240,7 @@ class InterprecsysBase:
                 dtype=tf.float32
                 )
 
-            agg_feat_4, _ = agg_attention(
+            agg_feat_4, self.attn_4 = agg_attention(
                 query=ctx_order_4,
                 keys=feat_4,
                 values=feat_4,
@@ -256,7 +262,7 @@ class InterprecsysBase:
                 dtype=tf.float32
                 )
 
-            agg_feat_5, _ = agg_attention(
+            agg_feat_5, self.attn_5 = agg_attention(
                 query=ctx_order_5,
                 keys=feat_5,
                 values=feat_5,
@@ -278,9 +284,9 @@ class InterprecsysBase:
             all_features = tf.stack([
                 agg_feat_1,
                 agg_feat_2,
-                agg_feat_3,
-                agg_feat_4,
-                agg_feat_5
+                agg_feat_3
+                # agg_feat_4,
+                # agg_feat_5
                 ],
                 axis=1, name="concat_feature")  # (N, k, C)
 
@@ -306,6 +312,8 @@ class InterprecsysBase:
                 [2]
             ), # (N, k)
         )  # (N, k)
+
+        self.attn_k = feature_weights
         
         # weighted sum
         weighted_sum_feat = tf.reduce_sum(

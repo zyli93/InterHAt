@@ -19,39 +19,30 @@ flags.DEFINE_integer('num_iter_per_save', 100, 'Number of iterations per save.')
 
 # Optimization
 flags.DEFINE_float('learning_rate', 0.001, 'Learning Rate.')
-flags.DEFINE_float('l2_reg', 0.01, 'Weight of L2 Regularizations.')
+flags.DEFINE_float('regularization_weight', 0.01, 'The weight of L2-regularization.')
 
 # Parameter Space
 flags.DEFINE_integer('embedding_size', 8, 'Hidden Embedding Size.')
 
 # Hyper-param
 flags.DEFINE_string('trial_id', '001', 'The ID of the current run.')
-flags.DEFINE_float('entity_graph_threshold', 0.5, 'The threshold used when building subgraphs.')
 flags.DEFINE_integer('neg_pos_ratio', 3, 'The ratio of negative samples v.s. positive.')
 flags.DEFINE_float('dropout_rate', 0.1, 'The dropout rate of Transformer model.')
-flags.DEFINE_float('regularization_weight', 0.01, 'The weight of L2-regularization.')
+flags.DEFINE_integer('highest_order', 4, 'The highest order of cross features.')
 
 # Structure & Configure
 flags.DEFINE_integer('random_seed', 2018, 'Random Seed.')
 flags.DEFINE_integer('num_block', 2, 'Number of blocks of Multi-head Attention.')
 flags.DEFINE_integer('num_head', 8, 'Number of heads of Multi-head Attention.')
-flags.DEFINE_integer('attention_size', 128, 'Number of hidden units in Multi-head Attention.')
-flags.DEFINE_boolean('scale_embedding', True, 'Boolean. Whether scale the embeddings.')
+flags.DEFINE_integer('attention_size', 8, 'Number of hidden units in Multi-head Attention.')
 flags.DEFINE_integer('pool_filter_size', 64, 'Size of pooling filter.')
-
-# Options
-flags.DEFINE_boolean('use_graph', True, 'Whether use graph information.')
-flags.DEFINE_string('nct_neg_sample_method', 'uniform', 'Non click-through negative sampling method.')
-flags.DEFINE_boolean('load_recent', True, 'Whether to load most recent model.')
-
 
 FLAGS = flags.FLAGS
 
 
 def run_model(data_loader,
               model,
-              epochs=None,
-              load_recent=False):
+              epochs=None):
     """
     Run model (fit/predict)
     
@@ -60,24 +51,12 @@ def run_model(data_loader,
     :param epochs:
     :param is_training: True - Training; False - Evaluation.
     :return:
-
-    TODO: add load_recent
     """
 
-    # ===== Saver for saving & loading =====
-
-    saver = tf.train.Saver(max_to_keep=10)
-
-    # ===== Configurations of runtime environment =====
-
-    config = tf.ConfigProto(
-        allow_soft_placement=True
-        # , log_device_placement=True
-    )
+    # configurations of runtime environment
+    config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
-
-    # ===== Run Everything =====
 
     # set dir for runtime log
     log_dir = os.path.join(Constant.LOG_DIR, FLAGS.dataset, "train_" + FLAGS.trial_id)
@@ -93,18 +72,14 @@ def run_model(data_loader,
              + FLAGS.dataset + "."
              + FLAGS.trial_id + ".pref", "w") as performance_writer:
 
-        # ===== Initialization of params =====
-
+        # initialization of params
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
 
-        # ===== Create TensorBoard Logger ======
-
-        train_writer = tf.summary.FileWriter(logdir=log_dir, graph=sess.graph)
+        # create TensorBoard logger [removed]
 
         for epoch in range(epochs):
             data_loader.has_next = True
-
             while data_loader.has_next:
 
                 # get batch
@@ -112,8 +87,7 @@ def run_model(data_loader,
                 batch_label = batch_label.squeeze()
 
                 # run training operation
-                op, merged_summary, reg_loss, \
-                mean_logloss, overall_loss, \
+                op, merged_summary, reg_loss, mean_logloss, overall_loss, \
                 sigmoid_logits = sess.run(
                     fetches=[
                         model.train_op,
@@ -142,13 +116,9 @@ def run_model(data_loader,
                     except:
                         auc = 0.00
                     
-                    msg = build_msg(stage="Trn",
-                                    epoch=epoch,
-                                    iteration=data_loader.batch_index,
+                    msg = build_msg(stage="Trn", epoch=epoch, iteration=data_loader.batch_index,
                                     global_step=sess.run(model.global_step),
-                                    logloss=mean_logloss,
-                                    regloss=reg_loss,
-                                    auc=auc)
+                                    logloss=mean_logloss, regloss=reg_loss, auc=auc)
                     
                     # write to file
                     print(msg, file=performance_writer)
@@ -157,37 +127,7 @@ def run_model(data_loader,
                     if sess.run(model.global_step) % 100 == 0:
                         print(msg)
 
-                # save model
-                if sess.run(model.global_step) \
-                        % FLAGS.num_iter_per_save == 0:
-                    print("\tSaving Checkpoint at global step [{}]!"
-                          .format(sess.run(model.global_step)))
-                    saver.save(sess,
-                               save_path=log_dir,
-                               global_step=sess.run(model.global_step))
-
-                # add tensorboard summary
-                train_writer.add_summary(
-                    merged_summary,
-                    global_step=sess.run(model.global_step)
-                )
-
-            # # run validation set
-            # epoch_msg, attn1, attn2, attn3, attnk \
-            #     = run_evaluation(sess=sess,
-            #                      data_loader=data_loader,
-            #                      epoch=epoch,
-            #                      model=model)
-
-            # attn = [attn1, attn2, attn3, attnk]
-            # print(epoch_msg)
-            # print(epoch_msg, file=performance_writer)
-            # if epoch > 5:
-            #     for x, ar in enumerate(attn):
-            #         np.savetxt("./performance/vis/{}.val.{}.{}.csv".format(
-            #             FLAGS.trial_id, epoch, x+1),
-            #             ar, delimiter=",", fmt="%f")
-
+                # add tensorboard summary [removed]
 
             test_msg, attn1, attn2, attn3, attn4, attnk \
                 = run_evaluation(sess=sess,
@@ -198,22 +138,6 @@ def run_model(data_loader,
             attn = [attn1, attn2, attn3, attn4, attnk]
             print(test_msg)
             print(test_msg, file=performance_writer)
-            print(attn1.shape)
-            # if epoch > 5:
-            #     for x, ar in enumerate(attn):
-            #         np.savetxt("./performance/vis/{}.tst.{}.{}.csv".format(
-            #             FLAGS.trial_id, epoch, x+1),
-            #             ar, delimiter=",", fmt="%f")
-
-
-
-        # run test set, with validation=False
-        # training_msg = run_evaluation(sess=sess,
-        #                               data_loader=data_loader,
-        #                               model=model,
-        #                               validation=False)
-        # print(training_msg)
-        # print(training_msg, file=performance_writer)
 
     print("Training finished!")
 
@@ -293,33 +217,25 @@ def main(argv):
     create_folder_tree(FLAGS.dataset)
 
     print("loading dataset ...")
-    dl = DataLoader(dataset=FLAGS.dataset,
-                    batch_size=FLAGS.batch_size)
+    dl = DataLoader(dataset=FLAGS.dataset, batch_size=FLAGS.batch_size)
 
-    if FLAGS.use_graph:
-        raise NotImplementedError("Graph version not implemented!")
-    else:
-        model = InterprecsysBase(
-            embedding_dim=FLAGS.embedding_size,
-            learning_rate=FLAGS.learning_rate,
-            field_size=dl.field_size,
-            feature_size=dl.feature_size,
-            batch_size=FLAGS.batch_size,
-            num_block=FLAGS.num_block,
-            attention_size=FLAGS.attention_size,
-            num_head=FLAGS.num_head,
-            dropout_rate=FLAGS.dropout_rate,
-            regularization_weight=FLAGS.regularization_weight,
-            random_seed=Constant.RANDOM_SEED,
-            scale_embedding=FLAGS.scale_embedding,
-            pool_filter_size=FLAGS.pool_filter_size,
-        )
+    model = InterprecsysBase(
+        embedding_dim=FLAGS.embedding_size,
+        learning_rate=FLAGS.learning_rate,
+        field_size=dl.field_size,
+        feature_size=dl.feature_size,
+        batch_size=FLAGS.batch_size,
+        num_block=FLAGS.num_block,
+        attention_size=FLAGS.attention_size,
+        num_head=FLAGS.num_head,
+        dropout_rate=FLAGS.dropout_rate,
+        regularization_weight=FLAGS.regularization_weight,
+        random_seed=Constant.RANDOM_SEED,
+        pool_filter_size=FLAGS.pool_filter_size,
+        highest_order=FLAGS.highest_order
+    )
 
-    # ===== Run everything =====
-    run_model(data_loader=dl, 
-              model=model, 
-              epochs=FLAGS.epoch, 
-              load_recent=FLAGS.load_recent)
+    run_model(data_loader=dl, model=model, epochs=FLAGS.epoch)
 
 
 if __name__ == '__main__':
