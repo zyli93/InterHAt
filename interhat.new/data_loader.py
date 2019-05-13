@@ -42,9 +42,9 @@ class DataLoader:
         self.has_next = False
 
         # ===== datasets =====
-        self.train_val, self.train_ind, self.train_label = self.load_data("train")
-        self.test_val, self.test_ind, self.test_label = self.load_data("test")
-        self.val_val, self.val_ind, self.val_label = self.load_data("val")
+        self.train_ind, self.train_label = self.load_data("train")
+        self.test_ind, self.test_label = self.load_data("test")
+        self.val_ind, self.val_label = self.load_data("val")
 
         self.train_size = self.train_label.shape[0]
         self.test_size = self.test_label.shape[0]
@@ -60,21 +60,18 @@ class DataLoader:
 
         :param usage:
         :return:
-            usage_val.np.array
             usage_ind.np.array
             usage_label.np.array
         """
         if usage not in ["train", "test", "val"]:
             raise ValueError
-        terms = ["value", "ind", "label"]
+        terms = ["ind", "label"]
         ret_sets = []
         data_dir = Constant.PARSE_DIR + self.dataset + "/"
         for trm in terms:
             ret_sets.append(
                 pd.read_csv(
-                    data_dir + 
-                    "{}_{}.csv".format(usage, trm), header=None).values
-            )
+                    data_dir + "{}_{}.csv".format(usage, trm), header=None).values)
 
         return ret_sets
 
@@ -83,7 +80,6 @@ class DataLoader:
         end_ind = min((bi + 1) * bs, self.train_size)
 
         b_ind = self.train_ind[bs * bi:end_ind]
-        b_value = self.train_val[bs * bi: end_ind]
         b_label = self.train_label[bs * bi: end_ind]
 
         self.batch_index += 1
@@ -91,7 +87,7 @@ class DataLoader:
             self.batch_index = 0
             self.has_next = False
 
-        return b_ind, b_value, b_label
+        return b_ind, b_label
 
     def generate_test_ivl(self):
         bs = self.batch_size
@@ -100,9 +96,8 @@ class DataLoader:
         for bi in range(batch_count):
             end_ind = min((bi + 1) * bs, self.test_size)
             batch_ind = self.test_ind[bs * bi: end_ind]
-            batch_val = self.test_val[bs * bi: end_ind]
             batch_label = self.test_label[bs * bi: end_ind]
-            yield batch_ind, batch_val, batch_label
+            yield batch_ind, batch_label
 
     # TODO in later versions: combine test & val
     def generate_val_ivl(self):
@@ -112,9 +107,8 @@ class DataLoader:
         for bi in range(batch_count):
             end_ind = min((bi + 1) * bs, self.val_size)
             batch_ind = self.val_ind[bs * bi: end_ind]
-            batch_val = self.val_val[bs * bi: end_ind]
             batch_label = self.val_label[bs * bi: end_ind]
-            yield batch_ind, batch_val, batch_label
+            yield batch_ind, batch_label
 
     def load_statistics(self):
         with open(Constant.PARSE_DIR + "{}/feat_dict".format(self.dataset), "r") as fin:
@@ -122,108 +116,4 @@ class DataLoader:
         return feat_size, field_size
 
 
-# Feature Dictionary of click through
-class FeatureDictionary(object):
-    def __init__(self,
-                 df_train,
-                 df_test,
-                 df_val,
-                 cfg):
 
-        self.dfTrain = df_train
-        self.dfTest = df_test
-        self.dfVal = df_val
-        self.cfg = cfg
-
-        self.feat_dim = 0
-        self.feat_dict = {}
-
-        self.gen_feat_dict()
-
-    def gen_feat_dict(self):
-        """
-        generate feature dictionary
-
-        for categorical feature, do one-hot encoding
-            e.g. if col[cat].unique() = 'x', 'y', 'z', tc = 3
-                 then feat_dict[cat] = { 'x': 3, 'y': 4, 'z': 5}
-        for numeric feature, do
-            e.g. if col[num] = 1.4, tc = 10
-                 then feat_dict[num] = 10
-        """
-
-        df = pd.concat([self.dfTrain, self.dfTest, self.dfVal], sort=False)
-        tc = 0
-        for col in df.columns:
-            if col in self.cfg.IGN_COL:
-                continue
-            elif col in self.cfg.NUM_COL:
-                self.feat_dict[col] = tc
-                tc += 1
-            else:
-                us = df[col].unique()
-                self.feat_dict[col] = dict(zip(us, range(tc, len(us) + tc)))
-                tc += len(us)
-
-        self.feat_dim = tc
-
-        # * Debug *
-        # with open("feat_dict_debug", "wb") as fout:
-        #     pickle.dump(self, fout)
-
-    def parse(self, df=None):
-
-        if not self.feat_dict:
-            raise ValueError("feat_dict is empty!!")
-
-        dfi = df.copy()
-
-        # discriminate train or test
-        # y = dfi['target'].values.tolist()
-        # y = dfi['label'].values
-        if 'label' in dfi.columns:
-            y_col_name = "label"
-        elif 'target' in dfi.columns:
-            y_col_name = "target"
-        elif 'click' in dfi.columns:
-            y_col_name = "click"
-        elif 0 in dfi.columns:
-            y_col_name = 0
-        else:
-            raise KeyError("Cannot find [label] or [target] column in the dataset.")
-
-        y = dfi[y_col_name]
-        dfi.drop([y_col_name], axis=1, inplace=True)
-
-        if 'id' in dfi.columns:
-            dfi.drop(['id'], axis=1, inplace=True)
-
-        # dfi for feature index
-        # dfv for feature value which can be either binary (1/0) or float (e.g., 10.24)
-
-        dfv = dfi.copy()
-        for col in dfi.columns:
-
-            if col in self.cfg.IGN_COL:
-                dfi.drop(col, axis=1, inplace=True)
-                dfv.drop(col, axis=1, inplace=True)
-
-            elif col in self.cfg.NUM_COL:
-                # for numeric feature columns, leave dfv[col] == dfi[col]
-                dfi[col] = self.feat_dict[col]
-
-            else:
-                dfi[col] = dfi[col].map(self.feat_dict[col])
-                # `map` the cat feature to an id
-                dfv[col] = 1.
-
-        # [Deprecated] Convert pd.DataFrame to np.ndarray to a list of list
-        # xi = dfi.values.tolist()
-        # xv = dfv.values.tolist()
-
-        # [New] convert to np.ndarray instead of list
-        # xi = dfi.values
-        # xv = dfv.values
-
-        # return xi, xv, y
-        return dfi, dfv, y

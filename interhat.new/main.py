@@ -29,6 +29,7 @@ flags.DEFINE_string('trial_id', '001', 'The ID of the current run.')
 flags.DEFINE_integer('neg_pos_ratio', 3, 'The ratio of negative samples v.s. positive.')
 flags.DEFINE_float('dropout_rate', 0.1, 'The dropout rate of Transformer model.')
 flags.DEFINE_integer('highest_order', 4, 'The highest order of cross features.')
+flags.DEFINE_float('temperature', 0.8, 'Temperature value of attentions.')
 
 # Structure & Configure
 flags.DEFINE_integer('random_seed', 2018, 'Random Seed.')
@@ -36,6 +37,7 @@ flags.DEFINE_integer('num_block', 2, 'Number of blocks of Multi-head Attention.'
 flags.DEFINE_integer('num_head', 8, 'Number of heads of Multi-head Attention.')
 flags.DEFINE_integer('attention_size', 8, 'Number of hidden units in Multi-head Attention.')
 flags.DEFINE_integer('pool_filter_size', 64, 'Size of pooling filter.')
+flags.DEFINE_string('pred_layers', "512,128,32,2", "Sizes of the last layers.")
 
 FLAGS = flags.FLAGS
 
@@ -82,8 +84,8 @@ def run_model(data_loader,
             data_loader.has_next = True
             while data_loader.has_next:
 
-                # get batch
-                batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
+                # get batch, removed batch_value
+                batch_ind, batch_label = data_loader.generate_train_batch_ivl()
                 batch_label = batch_label.squeeze()
 
                 # run training operation
@@ -99,7 +101,7 @@ def run_model(data_loader,
                     ],
                     feed_dict={
                         model.X_ind: batch_ind,
-                        model.X_val: batch_val,
+                        # model.X_val: batch_val,
                         model.label: batch_label,
                         model.is_training: True
                     }
@@ -232,7 +234,8 @@ def main(argv):
         regularization_weight=FLAGS.regularization_weight,
         random_seed=Constant.RANDOM_SEED,
         pool_filter_size=FLAGS.pool_filter_size,
-        highest_order=FLAGS.highest_order
+        highest_order=FLAGS.highest_order,
+        pred_mlp_layers=FLAGS.pred_layers
     )
 
     run_model(data_loader=dl, model=model, epochs=FLAGS.epoch)

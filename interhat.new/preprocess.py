@@ -5,9 +5,6 @@ Preprocessing functions
 """
 
 import os, sys
-import pickle
-import networkx as nx
-import json
 
 import pandas as pd
 import numpy as np
@@ -16,91 +13,123 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
 from const import Constant, Config
-from build_entity_graph import load_graph
-from data_loader import FeatureDictionary
-
-from itertools import product
-
 
 DATA_DIR = Constant.GRAPH_DIR
+NUM_BUCKET = 0
 
 
-def clk_thru_neg_sample(dataset):
-    """
-    Create negative samples for Click Through
-    """
-    pass
+# Feature Dictionary of click through
+class FeatureDictionary(object):
+    def __init__(self,
+                 df_train,
+                 df_test,
+                 df_val,
+                 cfg):
 
+        self.dfTrain = df_train
+        self.dfTest = df_test
+        self.dfVal = df_val
+        self.cfg = cfg
 
-# graph
-def parse_two_order_neighbors(dataset, threshold, is_cus):
-    """
-    Load Graphs and generate all 1st order and 2nd order neighbors
-    for all nodes.
+        self.feat_dim = 0
+        self.feat_dict = {}
 
-    The output file
-    """
-    G = load_graph(dataset, threshold, is_cus=is_cus)
+        self.gen_feat_dict()
 
-    order_1st = {}  # First order neighbors
-    order_2nd = {}  # Second order neighbors
+    def gen_feat_dict(self):
+        """
+        generate feature dictionary
 
-    for node in G.nodes():
-        order_1st[node] = list(G[node])
+        for categorical feature, do one-hot encoding
+            e.g. if col[cat].unique() = 'x', 'y', 'z', tc = 3
+                 then feat_dict[cat] = { 'x': 3, 'y': 4, 'z': 5}
 
-    for node in G.nodes():
-        node_second_neighbor = set()
-        for node_2 in order_1st[node]:
-            node_second_neighbor.update(order_1st[node_2])
-        order_2nd[node] = list(node_second_neighbor)
+        [OLD] for numerical feature, do
+            e.g. if col[num] = 1.4, tc = 10
+                 then feat_dict[num] = 10
 
-    node_nbr_dict = dict()
-    for node in G.nodes():
-        node_nbr_dict[node] = {
-            "1st_order_nbr": order_1st[node],
-            "2nd_order_nbr": order_2nd[node]
-        }
+        [NOW] for numerical feature, do
+            e.g. if norm(col[num]) = 0.24643, num_bucket = 10
+                 then it would be mapped to 2.0
+        """
 
-    role = "cus" if is_cus else "obj"
-    output_path = os.path.join(Constant.GRAPH_DIR, dataset, "{}_{}_nbr.pkl".format(role, threshold))
-    with open(output_path, "wb") as fout:
-        pickle.dump(node_nbr_dict, fout)
+        df = pd.concat([self.dfTrain, self.dfTest, self.dfVal], sort=False)
+        tc = 0
+        for col in df.columns:
+            if col in self.cfg.IGN_COL:
+                continue
 
-    print("Parsed neighbor files saved at {}".format(output_path))
+            # commented below code because of bucketing mechanism
+            # elif col in self.cfg.NUM_COL:
+            #     self.feat_dict[col] = tc
+            #     tc += 1
 
+            else:
+                us = df[col].unique()  # unique sample
+                self.feat_dict[col] = dict(zip(us, range(tc, len(us) + tc)))
+                tc += len(us)
 
-# clk_thru
-def parse_features(infile, dataset):
-    """
-    Load entity features and transfer
+        self.feat_dim = tc
 
-    NOT USED
-    """
+    def parse(self, df=None):
 
-    # Notes: (1) return pandas dataframe
-    #        (2) split cus and obj feature by prefix in cols
-    def parse_dataset_a():
-        input_path = Constant.RAW_DIR + "dsA"  # Or maybe more than 1 file?
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        if not self.feat_dict:
+            raise ValueError("feat_dict is empty!!")
 
-    def parse_dataset_b():
-        input_path = Constant.RAW_DIR + "dsB"  # Or maybe more than 1 file?
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        dfi = df.copy()
 
-    output_path = os.path.join(Constant.DATA_DIR, dataset)
+        # discriminate train or test
+        # y = dfi['target'].values.tolist()
+        # y = dfi['label'].values
+        if 'label' in dfi.columns:
+            y_col_name = "label"
+        elif 'target' in dfi.columns:
+            y_col_name = "target"
+        elif 'click' in dfi.columns:
+            y_col_name = "click"
+        elif 0 in dfi.columns:
+            y_col_name = 0
+        else:
+            raise KeyError("Cannot find [label] or [target] column in the dataset.")
 
-    df_ct_train, df_ct_test, df_cus, df_obj = None, None, None, None
-    if dataset == "A":
-        df_ct, df_cus, df_obj = parse_dataset_a()
-    elif dataset == "B":
-        df_ct, df_cus, df_obj = parse_dataset_b()
+        y = dfi[y_col_name]
+        dfi.drop([y_col_name], axis=1, inplace=True)
 
-    df_ct_train.to_csv(output_path + "/train.csv")
-    df_ct_test.to_csv(output_path + "/test.csv")
-    df_cus.to_csv(output_path, "/customer.csv")
-    df_obj.to_csv(output_path, "/object.csv")
+        if 'id' in dfi.columns:
+            dfi.drop(['id'], axis=1, inplace=True)
 
-    print("Parsed Features has been saved in {}".format(output_path))
+        # [OLD]
+        # dfi for feature index
+        # dfv for feature value which can be either binary (1/0) or float (e.g., 10.24)
+        # dfv = dfi.copy()
+
+        for col in dfi.columns:
+
+            if col in self.cfg.IGN_COL:
+                dfi.drop(col, axis=1, inplace=True)
+                # dfv.drop(col, axis=1, inplace=True)  # [OLD]
+
+            # commented below lines because of bucketing
+            # elif col in self.cfg.NUM_COL:
+            #     # for numeric feature columns, leave dfv[col] == dfi[col]
+            #     dfi[col] = self.feat_dict[col]
+
+            else:
+                dfi[col] = dfi[col].map(self.feat_dict[col])
+                # `map` the cat feature to an id
+                # dfv[col] = 1  # [OLD]
+
+        # [Deprecated] Convert pd.DataFrame to np.ndarray to a list of list
+        # xi = dfi.values.tolist()
+        # xv = dfv.values.tolist()
+
+        # [New] convert to np.ndarray instead of list
+        # xi = dfi.values
+        # xv = dfv.values
+
+        # return xi, xv, y
+        # return dfi, dfv, y  # [OLD]
+        return dfi, y
 
 
 def parse_criteo():
@@ -130,7 +159,7 @@ def parse_criteo():
     df = _fix_missing_values(df)
 
     print("\tNormalizing numerical features ...")
-    df = _normalizing_numerical(df, num_col)
+    df = _norm_bucket_numerical(df, num_col)
 
     # split train, valid, and test
     print("\tSplitting Train, Valid, and Test dataset ...")
@@ -151,7 +180,6 @@ def parse_criteo():
 def parse_avazu():
     input_file = "avazu/train"
     input_dir = Constant.RAW_DIR + input_file
-
 
     exceptions = ["device_id", "device_ip", "id"]
 
@@ -216,6 +244,7 @@ def parse_frappe():
     # save 3X3 dataframes to `parsed` folder
     print("\tSaving all splited matrices ...")
     _save_splits(full_splits, dataset="frappe")
+
 
 def parse_vis():
     input_file = "vis/train.csv"
@@ -331,7 +360,7 @@ def _split_ind_val_label(dataset, df_train, df_test, df_val):
 def _save_splits(splits, dataset):
 
     usage = ["train", "val", "test"]
-    term = ["ind", "value", "label"]
+    term = ["ind", "label"]
 
     if not os.path.isdir(Constant.PARSE_DIR + dataset):
         os.mkdir(Constant.PARSE_DIR + dataset)
@@ -354,18 +383,28 @@ def _save_splits(splits, dataset):
         fout.write("{} {}".format(splits[3].feat_dim, splits[0][0].shape[1]))
 
 
-def _normalizing_numerical(df, num_col):
+def _norm_bucket_numerical(df, num_col):
+    """Normalizing and bucketing numerical features
+
+    algo: target_bucket = normalized_value * num_bucket
+    e.g.: 5 = 0.5 * 10
+
+    """
     mms = MinMaxScaler(feature_range=(0, 1))
     df[num_col] = mms.fit_transform(df[num_col])
+
+    # fixed size bucketing
+    df[num_col] = np.floor(df[num_col] * NUM_BUCKET)
     return df
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 1 + 1:
-        sys.exit("format: python preprocess.py [dataset]")
+    if len(sys.argv) < 2 + 1:
+        sys.exit("format: python preprocess.py [dataset] [num_bucket]")
 
     dataset = sys.argv[1]
-    print(dataset)
+    NUM_BUCKET = int(sys.argv[2])
+    print("preprocess: {} with num bucket {}".format(dataset, NUM_BUCKET))
 
     if dataset == "criteo":
         parse_criteo()

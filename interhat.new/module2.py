@@ -130,24 +130,18 @@ def agg_attention(keys,
                               dtype=tf.float32)
 
     # project keys to attention space
-    # TODO: whether projected keys need activation?
-    # TODO: whether to all regularizer to all dense?
-    projected_keys = tf.layers.dense(keys,
-                                     attention_size,
-                                     activation=tf.nn.tanh,
-                                     kernel_regularizer=regularizer,
-                                     bias_regularizer=regularizer)  # [N, T, a_s]
+    projected_keys = tf.layers.dense(
+        keys, attention_size, use_bias=False,
+        activation=tf.nn.tanh,
+        kernel_regularizer=regularizer  # , bias_regularizer=regularizer
+        )  # [N, T, a_s]
 
-    # reshape query
-    # query_ = tf.reshape(query, [1, 1, -1])  # [1, 1, a_s]
-
-    # multiply query_, keys (broadcast)
     attention_energy = tf.reduce_sum(
         tf.multiply(projected_keys, ctx_vec),  # [N, T, a_s]
         axis=2)  # [N, T]
 
     if temperature:
-        attention_energy /= temperature  # temperatured
+        attention_energy /= temperature
 
     # generate attention weights
     attentions = tf.nn.softmax(logits=attention_energy)  # [N, T]
