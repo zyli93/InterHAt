@@ -184,6 +184,73 @@ def parse_avazu():
     _save_splits(full_splits, dataset="avazu")
 
 
+def parse_frappe():
+    input_file = "frappe/train.csv"
+    input_dir = Constant.RAW_DIR + input_file
+
+
+    print("Preprocessing avazu dataset ...")
+
+    # load dataset
+    print("\tLoading dataset ...")
+    df = pd.read_csv(input_dir, header=None)
+
+    # fix missing value -- no missing value
+
+    # drop columns
+    df = df.drop(Config("frappe").IGN_COL, axis=1)
+
+    # normalizing features -- no numerical cols
+
+    # split train, valid, and test
+    print("\tSplitting Train, Valid, and Test Dataset ...")
+    df_train, df_val, df_test = _split_train_validation_test(df)
+
+    # split ind, val, and test
+    print("\tSplitting Index, Value, and Labels ...")
+    full_splits = _split_ind_val_label(dataset="frappe",
+                                       df_train=df_train,
+                                       df_test=df_test,
+                                       df_val=df_val)
+
+    # save 3X3 dataframes to `parsed` folder
+    print("\tSaving all splited matrices ...")
+    _save_splits(full_splits, dataset="frappe")
+
+def parse_vis():
+    input_file = "vis/train.csv"
+    input_dir = Constant.RAW_DIR + input_file
+
+
+    print("Preprocessing avazu dataset ...")
+
+    # load dataset
+    print("\tLoading dataset ...")
+    df = pd.read_csv(input_dir, header=None)
+
+    # fix missing value -- no missing value
+
+    # drop columns
+    df = df.drop(Config("vis").IGN_COL, axis=1)
+
+    # normalizing features -- no numerical cols
+
+    # split train, valid, and test
+    print("\tSplitting Train, Valid, and Test Dataset ...")
+    df_train, df_val, df_test = _split_train_validation_test(df)
+
+    # split ind, val, and test
+    print("\tSplitting Index, Value, and Labels ...")
+    full_splits = _split_ind_val_label(dataset="vis",
+                                       df_train=df_train,
+                                       df_test=df_test,
+                                       df_val=df_val)
+
+    # save 3X3 dataframes to `parsed` folder
+    print("\tSaving all splited matrices ...")
+    _save_splits(full_splits, dataset="vis")
+
+
 def parse_safe_driver():
     dataset = "safedriver"
     input_file = "safedriver/train.csv"
@@ -236,8 +303,8 @@ def _split_train_validation_test(df):
     df_train_val, df_test = train_test_split(
         df,
         test_size=0.1,
-        # shuffle=False)
-        random_state=666)
+        shuffle=False)
+        # random_state=666)
 
     df_train, df_val = train_test_split(
         df_train_val,
@@ -298,6 +365,7 @@ if __name__ == "__main__":
         sys.exit("format: python preprocess.py [dataset]")
 
     dataset = sys.argv[1]
+    print(dataset)
 
     if dataset == "criteo":
         parse_criteo()
@@ -307,5 +375,9 @@ if __name__ == "__main__":
         parse_safe_driver()
     elif dataset == "movielens":
         raise NotImplementedError("To Be Implemented.")
+    elif dataset == "frappe":
+        parse_frappe()
+    elif dataset == "vis":
+        parse_vis()
     else:
         raise ValueError("Not supported `dataset` {}".format(dataset))

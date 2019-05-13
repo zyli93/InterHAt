@@ -25,7 +25,7 @@ class Constant(object):
     PARSE_DIR = os.getcwd() + "/data/parse/"
     LOG_DIR = os.getcwd() + "/log/"
 
-    RANDOM_SEED = 723
+    RANDOM_SEED = 666
 
 
 class Config:
@@ -122,7 +122,15 @@ class Config:
                 "device_id",
                 "id"
             ]
+        elif dataset == "frappe":
+            self.CAT_COL = list(range(1, 11))
+            self.IGN_COL = []
+            self.NUM_COL = []
 
+        elif dataset == "vis":
+            self.CAT_COL = list(range(1, 11))
+            self.IGN_COL = []
+            self.NUM_COL = []
 
         else:
              raise ValueError("Invalid dataset {}".format(dataset))

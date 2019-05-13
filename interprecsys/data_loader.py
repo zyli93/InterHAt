@@ -187,6 +187,8 @@ class FeatureDictionary(object):
             y_col_name = "target"
         elif 'click' in dfi.columns:
             y_col_name = "click"
+        elif 0 in dfi.columns:
+            y_col_name = 0
         else:
             raise KeyError("Cannot find [label] or [target] column in the dataset.")
 

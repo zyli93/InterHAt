@@ -1,9 +1,4 @@
-"""Hybrid model of Attentive FM and Graph Attention Network
-
-This is a complex hybrid model of "Attentive Factorization Machine and Graph Attention Network",
-    "Graph Attention Network", and "Graph Convolutional Network".
-
-@author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
+"""@author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
 """
 
 import tensorflow as tf
@@ -11,84 +6,6 @@ import tensorflow as tf
 from const import Constant
 from modules import multihead_attention, feedforward, embedding
 from module2 import recur_attention, agg_attention
-
-
-class Interprecsys:
-    def __init__(self
-                 , hidden_dimension
-                 , num_cus_feat
-                 , num_obj_feat
-                 , ):
-        """
-
-        :param hidden_dimension: Dimension of hidden variable features
-        :param num_cus_feat: int
-        :param num_obj_feat: int
-        """
-
-        # ===== parameters =====
-        self.hidden_dimension = hidden_dimension
-        self.num_cus_feat = num_cus_feat
-        self.num_obj_feat = num_obj_feat
-
-        # ===== tensors/placeholders to be initialized =====
-
-        #   placeholders
-        self.input_feature_placeholders = {}
-        self.input_label_placeholder = None
-
-        #   embeddings
-        self.feat_hid_emb_lookup = None
-        self.feat_embedding_tensors = {}
-
-    def reg_placeholders_variables(self):
-        """
-        Register all placeholders/trainable_params ne],
-
-        :return: None
-        """
-        # ===== Define placeholders for the input ======
-
-        with tf.name_scope("input") as scope:
-            # convert all continuous features to discrete features and therefore no `cat/obj_num_feat`.
-            self.input_feature_placeholders = {
-                "cus_2nd_feat": tf.placeholder(dtype=tf.int32, shape=[None, self.num_cus_feat],
-                                               name="customer_2nd_neighbor_feat"),
-                "obj_2nd_feat": tf.placeholder(dtype=tf.int32, shape=[None, self.num_obj_feat],
-                                               name="object_2nd_neighbor_feat"),
-                "cus_1st_feat": tf.placeholder(dtype=tf.int32, shape=[None, self.num_cus_feat],
-                                               name="customer_1st_neighbor_feat"),
-                "obj_1st_feat": tf.placeholder(dtype=tf.int32, shape=[None, self.num_obj_feat],
-                                               name="object_1st_neighbor_feat"),
-                "cus_feat": tf.placeholder(dtype=tf.int32, shape=[None, self.num_cus_feat],
-                                           name="customer_feature"),
-                "obj_feat": tf.placeholder(dtype=tf.int32, shape=[None, self.num_obj_feat],
-                                           name="object_feature")
-            }
-            self.input_label_placeholder = tf.placeholder(dtype=tf.int32, shape=None, name="clk_thru_label")
-
-        # ===== Define embedding layers =====
-
-        self.feat_hid_emb_lookup = tf.get_variable(name="feature_hidden_embeddings",
-                                                   shape=[self.num_cus_feat + self.num_obj_feat,
-                                                          self.hidden_dimension])
-
-        # ===== Define AGG kernels =====
-
-        # ===== Define Attention kernels =====
-
-    def build_graph(self):
-        """
-        Building computational graph, modularize by `with`.
-        """
-
-        # ===== Get embeddings for input features =====
-
-        with tf.name_scope("input_to_embeddings") as scope:
-            for feat_name, feat_tensor in self.input_feature_placeholders.items():
-                self.feat_embedding_tensors[feat_name] = tf.nn.embedding_lookup(self.feat_hid_emb_lookup, feat_tensor)
-
-        # ===== Apply GraphSAGE AGG/CONCAT/NONLINEAR =====
 
 
 # ===== InterpRecSys Base Model =====
@@ -131,12 +48,6 @@ class InterprecsysBase:
         # variables [None]
         self.embedding_lookup = None
         self.emb = None  # raw features
-        self.attn = tf.get_variable(
-            name="attention_factors",
-            shape=self.pool_filter_size,
-            initializer=tf.contrib.layers.xavier_initializer(),
-            dtype=tf.float32)
-
 
         # placeholders
         self.X_ind, self.X_val, self.label = None, None, None
@@ -154,6 +65,12 @@ class InterprecsysBase:
         # intermediate results
         self.feature_weights = None
         self.sigmoid_logits = None
+
+        # attns
+        self.attn_1, self.attn_2, self.attn_3, self.attn_4, self.attn_5 = \
+        None, None, None, None, None
+
+        self.attn_k = None
 
         # global training steps
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -224,8 +141,9 @@ class InterprecsysBase:
         #                                    scope="feed_forward")  # (N, T, C)
         # End of version 1
 
-        # multi-layer, multi-head attention Version 2
-        # major difference: remove multi-block
+        # | multi-layer, multi-head attention Version 2
+        # | major difference: remove multi-block
+
         with tf.name_scope("Multilayer_attn"):
             with tf.variable_scope("attention_head") as scope:
                 features, _ = multihead_attention(
@@ -243,119 +161,134 @@ class InterprecsysBase:
                     num_units=[4 * self.embedding_dim,
                                self.embedding_dim],
                     scope="feed_forward"
-                )
+                )  # [N, T, dim]
+                
 
-        multihead_features = features
-
-        # build second order cross
-        with tf.name_scope("Second_order") as scope:
-            # second_cross = tf.layers.conv1d(inputs=tf.transpose(
-            #     features, [0, 2, 1]),
-            #     # transpose: (N, C, T)
-            #     filters=1,
-            #     kernel_size=1,
-            #     activation=tf.nn.relu,
-            #     use_bias=True)  # (N, C, 1)
-
-            second_cross_context = tf.get_variable(
-                name="second_cross_attn_context",
+        # multi-head feature to agg 1st order feature
+        with tf.name_scope("Agg_first_order") as scope:
+            ctx_order_1 = tf.get_variable(
+                name="context_order_1",
                 shape=(self.attention_size),
-                dtype=tf.float32
-            )
+                dtype=tf.float32)
 
-            # generate second cross features
-            # the _ is heat (attentions)
-            second_cross, _ = agg_attention(
-                query=second_cross_context,
+            agg_feat_1, self.attn_1 = agg_attention(
+                query=ctx_order_1,
                 keys=features,
                 values=features,
                 attention_size=self.attention_size,
                 regularize_scale=self.regularization_weight
-            )  # [N, dim]=[N, C]
+                )  # [N, dim]
 
-            # print("second_cross dim", second_cross.get_shape())
+
+        # build second order cross
+        with tf.name_scope("Second_order") as scope:
+            feat_2 = tf.multiply(
+                features,
+                tf.expand_dims(agg_feat_1, axis=1)
+                )  # [N, T, dim]
+
+            feat_2 += features  # Add the residual, [N, T, dim]
+
+            ctx_order_2 = tf.get_variable(
+                name="context_order_2",
+                shape=(self.attention_size),
+                dtype=tf.float32
+                )
+
+            agg_feat_2, self.attn_2 = agg_attention(
+                query=ctx_order_2,
+                keys=feat_2,
+                values=feat_2,
+                attention_size=self.attention_size,
+                regularize_scale=self.regularization_weight
+                )
 
         # build third order cross
         with tf.name_scope("Third_order") as scope:
-            # second_cross = tf.transpose(second_cross, [0, 2, 1])  # (N, 1, C), old
-            second_cross = tf.expand_dims(second_cross, axis=1)  # [N, 1, C]
+            feat_3 = tf.multiply(
+                features,
+                tf.expand_dims(agg_feat_2, axis=1)
+                )  # [N, T, dim]
 
-            # old
-            third_cross = recur_attention(queries=second_cross,
-                                          keys=self.emb,
-                                          values=self.emb,
-                                          attention_size=self.attention_size,
-                                          scope="third_order",
-                                          regularize_scale=self.regularization_weight)  # (N, 1, C)
+            feat_3 += feat_2  # Add the residual, [N, T, dim]
+
+            ctx_order_3 = tf.get_variable(
+                name="context_order_3",
+                shape=(self.attention_size),
+                dtype=tf.float32
+                )
+
+            agg_feat_3, self.attn_3 = agg_attention(
+                query=ctx_order_3,
+                keys=feat_3,
+                values=feat_3,
+                attention_size=self.attention_size,
+                regularize_scale=self.regularization_weight
+                )
+
+        with tf.name_scope("Fourth_order") as scope:
+            feat_4 = tf.multiply(
+                features,
+                tf.expand_dims(agg_feat_3, axis=1)
+                )  # [N, T, dim]
+
+            feat_4 += feat_3  # Add the residual, [N, T, dim]
+
+            ctx_order_4 = tf.get_variable(
+                name="context_order_4",
+                shape=(self.attention_size),
+                dtype=tf.float32
+                )
+
+            agg_feat_4, self.attn_4 = agg_attention(
+                query=ctx_order_4,
+                keys=feat_4,
+                values=feat_4,
+                attention_size=self.attention_size,
+                regularize_scale=self.regularization_weight
+                )
+
+        with tf.name_scope("Fifth_order") as scope:
+            feat_5 = tf.multiply(
+                features,
+                tf.expand_dims(agg_feat_4, axis=1)
+                )  # [N, T, dim]
+
+            feat_4 += feat_3  # Add the residual, [N, T, dim]
+
+            ctx_order_5 = tf.get_variable(
+                name="context_order_5",
+                shape=(self.attention_size),
+                dtype=tf.float32
+                )
+
+            agg_feat_5, self.attn_5 = agg_attention(
+                query=ctx_order_5,
+                keys=feat_5,
+                values=feat_5,
+                attention_size=self.attention_size,
+                regularize_scale=self.regularization_weight
+                )
+
+
+        print("agg 1 shape", agg_feat_1.get_shape().as_list())
+        print("agg 2 shape", agg_feat_2.get_shape().as_list())
+        print("agg 1 shape", agg_feat_3.get_shape().as_list())
+        print("agg 4 shape", agg_feat_4.get_shape().as_list())
+        print("agg 5 shape", agg_feat_5.get_shape().as_list())
 
         with tf.name_scope("Merged_features"):
 
             # concatenate [enc, second_cross, third_cross]
             # TODO: can + multihead_features
-            all_features = tf.concat(
-                [self.emb, 
-                    # multihead_features,
-                    second_cross, 
-                    third_cross],
-                axis=1, name="concat_feature")  # (N, (T+2), C)
-
-            # # Version 2
-            # ===== Generate weights of all features =====
-
-            # column wise Conv-1D, ReLU, and Softmax (sum up to one)
-            # TODO: can be relu+softmax, or direct softmax
-            # self.feature_weights = tf.nn.softmax(
-            #     tf.layers.conv1d(inputs=all_features,
-            #                      filters=1,
-            #                      kernel_size=1,
-            #                      activation=tf.nn.relu,
-            #                      use_bias=True),  # (N, (T+2), 1)
-            #     name="Feature_attentive_weights"
-            # )  # (N, (T+2), 1)
-
-            # # condense features with pooling - feature abstracts
-            # condense_feature = tf.reduce_max(
-            #     tf.layers.conv1d(inputs=all_features,
-            #                      filters=self.pool_filter_size,
-            #                      kernel_size=1,
-            #                      activation=tf.nn.relu,
-            #                      use_bias=True),  # (N, (T+2), pf_size)
-            #     axis=2,
-            #     name="Feature_abstracts"
-            # )  # (N, (T+2), 1)
-
-            # # predictions in terms of logits
-            # logits = tf.reduce_sum(
-            #     tf.multiply(
-            #         tf.squeeze(self.feature_weights),
-            #         condense_feature
-            #     ),  # (N, T+2)
-            #     axis=1,
-            #     name="Logits"
-            # )  # (N)
-
-            # Version 1
-            # ===== Weighted Sum of Features =====
-             
-            # weighted_sum_all_feature = tf.reduce_sum(
-            #     tf.multiply(all_features,
-            #                self.feature_weights),  # (N, (T+2), C)
-            #     axis=2,
-            #     name="Weighted_Sum_of_All_Features"
-            # )  # (N, (T+2))
-            # 
-            #  # ===== Dense layers: merging from T+2 to 1 =====
-            # 
-            #  # TODO: tune - dense's activation function
-            # 
-            # logits = tf.squeeze(
-            #         tf.layers.dense(
-            #             inputs=weighted_sum_all_feature,
-            #             units=1,
-            #             activation=None,
-            #             use_bias=True,
-            #             name="Logits"),
-            #         axis=1)  # (N)
+            all_features = tf.stack([
+                agg_feat_1,
+                agg_feat_2,
+                agg_feat_3
+                # agg_feat_4,
+                # agg_feat_5
+                ],
+                axis=1, name="concat_feature")  # (N, k, C)
 
         # Version 3
         # map C to pool_filter_size dimension
@@ -365,7 +298,7 @@ class InterprecsysBase:
             kernel_size=1,
             use_bias=True,
             name="Mapped_all_feature"
-        )  # (N, T+2, pf_size)
+        )  # (N, k, pf_size)
         
         # apply context vector
         feature_weights = tf.nn.softmax(
@@ -375,17 +308,19 @@ class InterprecsysBase:
                     units=1,
                     activation=None,
                     use_bias=False
-                ),  # (N, T+2, 1),
+                ),  # (N, k, 1),
                 [2]
-            ), # (N, T+2)
-        )  # (N, T+2)
+            ), # (N, k)
+        )  # (N, k)
+
+        self.attn_k = feature_weights
         
         # weighted sum
         weighted_sum_feat = tf.reduce_sum(
             tf.multiply(
                 all_features,
                 tf.expand_dims(feature_weights, axis=2),
-            ),  # (N, T+2, C)
+            ),  # (N, k, C)
             axis=[1],
             name="Attn_weighted_sum_feature"
         )  # (N, C)
@@ -417,9 +352,6 @@ class InterprecsysBase:
         self.sigmoid_logits = tf.nn.sigmoid(logits)
 
         # regularization term
-        # self.regularization_loss = tf.reduce_sum(
-        #         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)) \
-        #         * self.regularization_weight
         self.regularization_loss = tf.losses.get_regularization_loss()
 
         # sum logloss
@@ -431,14 +363,11 @@ class InterprecsysBase:
                 logits=tf.expand_dims(logits, -1),
                 name="SumLogLoss"))
 
-        # mean logloss [old]
-        self.mean_logloss = tf.divide(self.logloss,
-                                      tf.to_float(self.batch_size),
-                                      name="MeanLogLoss")
-
-        # mean logloss
-        # self.mean_logloss = tf.reduce_mean(self.logloss,
-        #                                    name="MeanLogLoss")
+        self.mean_logloss = tf.divide(
+            self.logloss,
+            tf.to_float(self.batch_size),
+            name="MeanLogLoss"
+            )
 
         # overall loss
         self.overall_loss = tf.add(
@@ -447,18 +376,6 @@ class InterprecsysBase:
             name="OverallLoss"
         )
         
-        # mean loss
-        # with tf.name_scope("Mean_loss"):
-        #     self.loss = tf.add(
-        #         tf.reduce_sum(
-        #             tf.nn.sigmoid_cross_entropy_with_logits(
-        #                 labels=self.label,
-        #                 logits=logits,
-        #                 name="Cross_Entropy_Loss")),
-        #         self.regularization_loss,
-        #         name="Overall_Loss"
-        #     )
-
         tf.summary.scalar("Mean_LogLoss", self.mean_logloss)
         tf.summary.scalar("Reg_Loss", self.regularization_loss)
         tf.summary.scalar("Overall_Loss", self.overall_loss)

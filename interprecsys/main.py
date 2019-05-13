@@ -6,7 +6,7 @@ import numpy as np
 from const import Constant
 from sklearn.metrics import roc_auc_score
 
-from model import Interprecsys, InterprecsysBase
+from model import  InterprecsysBase
 from utils import create_folder_tree, evaluate_metrics, build_msg
 
 flags = tf.app.flags
@@ -101,7 +101,7 @@ def run_model(data_loader,
         # ===== Create TensorBoard Logger ======
 
         train_writer = tf.summary.FileWriter(logdir=log_dir, graph=sess.graph)
-        
+
         for epoch in range(epochs):
             data_loader.has_next = True
 
@@ -133,7 +133,7 @@ def run_model(data_loader,
 
                 # print results and write to file
                 if sess.run(model.global_step) \
-                        % 100 == 0:
+                        % 10 == 0:
 
                     # get AUC
                     try:
@@ -154,7 +154,7 @@ def run_model(data_loader,
                     print(msg, file=performance_writer)
 
                     # print performance every 1000 batches
-                    if sess.run(model.global_step) % 1000 == 0:
+                    if sess.run(model.global_step) % 100 == 0:
                         print(msg)
 
                 # save model
@@ -172,23 +172,38 @@ def run_model(data_loader,
                     global_step=sess.run(model.global_step)
                 )
 
-            # run validation set
-            epoch_msg = run_evaluation(sess=sess,
-                                       data_loader=data_loader,
-                                       epoch=epoch,
-                                       model=model)
+            # # run validation set
+            # epoch_msg, attn1, attn2, attn3, attnk \
+            #     = run_evaluation(sess=sess,
+            #                      data_loader=data_loader,
+            #                      epoch=epoch,
+            #                      model=model)
 
-            print(epoch_msg)
-            print(epoch_msg, file=performance_writer)
+            # attn = [attn1, attn2, attn3, attnk]
+            # print(epoch_msg)
+            # print(epoch_msg, file=performance_writer)
+            # if epoch > 5:
+            #     for x, ar in enumerate(attn):
+            #         np.savetxt("./performance/vis/{}.val.{}.{}.csv".format(
+            #             FLAGS.trial_id, epoch, x+1),
+            #             ar, delimiter=",", fmt="%f")
 
-            if epoch > 4:
-                test_msg = run_evaluation(sess=sess,
-                                          data_loader=data_loader,
-                                          epoch=epoch,
-                                          model=model,
-                                          validation=False)
-                print(test_msg)
-                print(test_msg, file=performance_writer)
+
+            test_msg, attn1, attn2, attn3, attn4, attnk \
+                = run_evaluation(sess=sess,
+                                 data_loader=data_loader,
+                                 epoch=epoch,
+                                 model=model,
+                                 validation=False)
+            attn = [attn1, attn2, attn3, attn4, attnk]
+            print(test_msg)
+            print(test_msg, file=performance_writer)
+            print(attn1.shape)
+            # if epoch > 5:
+            #     for x, ar in enumerate(attn):
+            #         np.savetxt("./performance/vis/{}.tst.{}.{}.csv".format(
+            #             FLAGS.trial_id, epoch, x+1),
+            #             ar, delimiter=",", fmt="%f")
 
 
 
@@ -219,17 +234,24 @@ def run_evaluation(sess, data_loader, model,
     test_labels = []
     sum_logloss = 0
 
+    attn1, attn2, attn3, attnk = [], [], [], []
+    attn4 = []
     while True:
         try:
             ind, val, label = next(batch_generator)
             label = label.squeeze()
         except StopIteration:
             break
-
-        batch_sigmoid_logits, batch_logloss = sess.run(
+        batch_sigmoid_logits, batch_logloss, \
+            b_attn1, b_attn2, b_attn3, b_attn4, b_attnk = sess.run(
             fetches=[
                 model.sigmoid_logits,
-                model.logloss
+                model.logloss,
+                model.attn_1,
+                model.attn_2,
+                model.attn_3,
+                model.attn_4,
+                model.attn_k
             ],
             feed_dict={
                 model.X_ind: ind,
@@ -241,6 +263,11 @@ def run_evaluation(sess, data_loader, model,
         sigmoid_logits += batch_sigmoid_logits.tolist()
         test_labels += label.astype(np.int32).tolist()
         sum_logloss += np.sum(batch_logloss)
+        attn1.append(b_attn1)
+        attn2.append(b_attn2)
+        attn3.append(b_attn3)
+        attn4.append(b_attn4)
+        attnk.append(b_attnk)
     
     mean_logloss = sum_logloss / len(sigmoid_logits)
     auc = roc_auc_score(test_labels, sigmoid_logits)
@@ -252,8 +279,13 @@ def run_evaluation(sess, data_loader, model,
         logloss=mean_logloss,
         auc=auc
     )
+    attn1 = np.concatenate(attn1[:-1], axis=0)
+    attn2 = np.concatenate(attn2[:-1], axis=0)
+    attn3 = np.concatenate(attn3[:-1], axis=0)
+    attn4 = np.concatenate(attn4[:-1], axis=0)
+    attnk = np.concatenate(attnk[:-1], axis=0)
 
-    return msg
+    return msg, attn1, attn2, attn3, attn4, attnk
 
 
 def main(argv):
