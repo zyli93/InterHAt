@@ -1,4 +1,4 @@
-# Interpretable Recommender System (InterpRecSys)
+# Interpretable Click-through Rate Prediction through Hierarchical Attention
 
 Author: Zeyu Li <zyli@cs.ucla.edu>
 
