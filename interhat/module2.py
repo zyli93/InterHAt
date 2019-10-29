@@ -67,15 +67,11 @@ def recur_attention(queries,
         """
 
         # outer(Q, K[i])
-        # print("keys shape", keys.get_shape())
-
         kq_outer = tf.reshape(
             # [N, T, C] mult [N, 1, C]
             tf.multiply(keys, queries), # [N, T, C]
             shape=[-1, T * C]
         )  # (N, T * C)
-
-        # print("kq_outer shape", kq_outer.get_shape())
 
         # relu(W * outer(Q, k[i]) + b)
 
@@ -94,8 +90,6 @@ def recur_attention(queries,
             tf.multiply(linear_activation, h_),
             axis=-1
         )  # (N, T)
-
-        # print("attention factor shape", attention_factor.get_shape())
 
         attention_factor = tf.expand_dims(
             attention_factor,

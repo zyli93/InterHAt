@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #/usr/bin/python2
+
 '''
 June 2017 by kyubyong park. 
 kbpark.linguist@gmail.com.
@@ -9,6 +10,7 @@ https://www.github.com/kyubyong/transformer
 from __future__ import print_function
 import tensorflow as tf
 import numpy as np
+
 
 def normalize(inputs,
               epsilon=1e-8,
@@ -108,7 +110,6 @@ def embedding(inputs,
                                        dtype=tf.float32,
                                        shape=[vocab_size, num_units],
                                        initializer=tf.contrib.layers.xavier_initializer())
-                                       # initializer=tf.initializers.random_normal())
         if zero_pad:
             lookup_table = tf.concat((tf.zeros(shape=[1, num_units]),
                                       lookup_table[1:, :]), 0)

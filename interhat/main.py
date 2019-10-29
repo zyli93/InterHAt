@@ -1,14 +1,18 @@
+"""
+    InterHAt main function
+
+    Author: Zeyu Li <zyli@cs.ucla.edu>
+"""
+import os
+
 import tensorflow as tf
-
-import os, sys
-
-from data_loader import DataLoader
 import numpy as np
-from const import Constant
 from sklearn.metrics import roc_auc_score
 
+from const import Constant
 from model import  InterprecsysBase
 from utils import create_folder_tree, evaluate_metrics, build_msg
+from data_loader import DataLoader
 
 flags = tf.app.flags
 
@@ -23,12 +27,8 @@ flags.DEFINE_float('learning_rate', 0.001, 'Learning Rate.')
 flags.DEFINE_float('l2_reg', 0.01, 'Weight of L2 Regularizations.')
 
 # Parameter Space
-flags.DEFINE_integer('embedding_size', 8, 'Hidden Embedding Size.')
-
-# Hyper-param
 flags.DEFINE_string('trial_id', '001', 'The ID of the current run.')
-flags.DEFINE_float('entity_graph_threshold', 0.5, 'The threshold used when building subgraphs.')
-flags.DEFINE_integer('neg_pos_ratio', 3, 'The ratio of negative samples v.s. positive.')
+flags.DEFINE_integer('embedding_size', 8, 'Hidden Embedding Size.')
 flags.DEFINE_float('dropout_rate', 0.1, 'The dropout rate of Transformer model.')
 flags.DEFINE_float('regularization_weight', 0.01, 'The weight of L2-regularization.')
 
@@ -40,41 +40,22 @@ flags.DEFINE_integer('attention_size', 128, 'Number of hidden units in Multi-hea
 flags.DEFINE_boolean('scale_embedding', True, 'Boolean. Whether scale the embeddings.')
 flags.DEFINE_integer('pool_filter_size', 64, 'Size of pooling filter.')
 
-# Options
-flags.DEFINE_boolean('use_graph', True, 'Whether use graph information.')
-flags.DEFINE_string('nct_neg_sample_method', 'uniform', 'Non click-through negative sampling method.')
-flags.DEFINE_boolean('load_recent', True, 'Whether to load most recent model.')
-
-
 FLAGS = flags.FLAGS
 
-
-def run_model(data_loader,
-              model,
-              epochs=None,
-              load_recent=False):
+def run_model(data_loader, model, epochs=None):
     """
     Run model (fit/predict)
     
     :param data_loader:
     :param model:
     :param epochs:
-    :param is_training: True - Training; False - Evaluation.
-    :return:
-
-    TODO: add load_recent
     """
 
     # ===== Saver for saving & loading =====
-
     saver = tf.train.Saver(max_to_keep=10)
 
     # ===== Configurations of runtime environment =====
-
-    config = tf.ConfigProto(
-        allow_soft_placement=True
-        # , log_device_placement=True
-    )
+    config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
     config.gpu_options.per_process_gpu_memory_fraction = 0.8
 
@@ -95,27 +76,23 @@ def run_model(data_loader,
              + FLAGS.trial_id + ".pref", "w") as performance_writer:
 
         # ===== Initialization of params =====
-
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
 
         # ===== Create TensorBoard Logger ======
-
         train_writer = tf.summary.FileWriter(logdir=log_dir, graph=sess.graph)
         
         for epoch in range(epochs):
             data_loader.has_next = True
 
             while data_loader.has_next:
-
                 # get batch
                 # batch_ind, batch_val, batch_label = data_loader.generate_train_batch_ivl()
                 batch_ind, batch_label = data_loader.generate_train_batch_ivl()
                 batch_label = batch_label.squeeze()
 
                 # run training operation
-                op, merged_summary, reg_loss, \
-                mean_logloss, overall_loss, \
+                op, merged_summary, reg_loss, mean_logloss, overall_loss, \
                 sigmoid_logits = sess.run(
                     fetches=[
                         model.train_op,
@@ -127,20 +104,17 @@ def run_model(data_loader,
                     ],
                     feed_dict={
                         model.X_ind: batch_ind,
-                        # model.X_val: batch_val,
                         model.label: batch_label,
                         model.is_training: True
                     }
                 )
 
                 # print results and write to file
-                if sess.run(model.global_step) \
-                        % 100 == 0:
+                if sess.run(model.global_step) % 100 == 0:
 
                     # get AUC
                     try:
-                        auc = roc_auc_score(batch_label.astype(np.int32),
-                                            sigmoid_logits)
+                        auc = roc_auc_score(batch_label.astype(np.int32), sigmoid_logits)
                     except:
                         auc = 0.00
                     
@@ -174,16 +148,7 @@ def run_model(data_loader,
                     global_step=sess.run(model.global_step)
                 )
 
-            # run validation set
-            # epoch_msg = run_evaluation(sess=sess,
-            #                            data_loader=data_loader,
-            #                            epoch=epoch,
-            #                            model=model)
-
-            # print(epoch_msg)
-            # print(epoch_msg, file=performance_writer)
-
-            # at1, at2, at3, at4, at5, atk \
+            # at1, at2, at3, atk \
             test_msg, \
                 at1, at2, at3, atk  = run_evaluation(sess=sess,
                                       data_loader=data_loader,
@@ -199,16 +164,6 @@ def run_model(data_loader,
                             ar, delimiter=",", fmt="%f")
             print(test_msg)
             print(test_msg, file=performance_writer)
-
-
-
-        # run test set, with validation=False
-        # training_msg = run_evaluation(sess=sess,
-        #                               data_loader=data_loader,
-        #                               model=model,
-        #                               validation=False)
-        # print(training_msg)
-        # print(training_msg, file=performance_writer)
 
     print("Training finished!")
 
@@ -229,18 +184,16 @@ def run_evaluation(sess, data_loader, model,
     test_labels = []
     sum_logloss = 0
     
-    at1, at2, at3, at4, at5, atk = [], [], [], [], [], []
+    at1, at2, at3, atk = [], [], [], []
 
     while True:
         try:
-            # ind, val, label = next(batch_generator)
             ind, label = next(batch_generator)
             label = label.squeeze()
         except StopIteration:
             break
         
-        # b_a1, b_a2, b_a3, b_a4, b_a5, b_ak \
-
+        # b_a1, b_a2, b_a3, b_ak \
         batch_sigmoid_logits, batch_logloss, \
             b_a1, b_a2, b_a3, b_ak \
                 = sess.run(
@@ -250,13 +203,10 @@ def run_evaluation(sess, data_loader, model,
                 model.attn_1,
                 model.attn_2,
                 model.attn_3,
-                # model.attn_4,
-                # model.attn_5,
                 model.attn_k,
             ],
             feed_dict={
                 model.X_ind: ind,
-                # model.X_val: val,
                 model.label: label,
                 model.is_training: False
             }
@@ -268,8 +218,6 @@ def run_evaluation(sess, data_loader, model,
         at1.append(b_a1)
         at2.append(b_a2)
         at3.append(b_a3)
-        # at4.append(b_a4)
-        # at5.append(b_a5)
         atk.append(b_ak)
     
     mean_logloss = sum_logloss / len(sigmoid_logits)
@@ -286,46 +234,39 @@ def run_evaluation(sess, data_loader, model,
     attn1 = np.concatenate(at1[:-1], axis=0)
     attn2 = np.concatenate(at2[:-1], axis=0)
     attn3 = np.concatenate(at3[:-1], axis=0)
-    # attn4 = np.concatenate(at4[:-1], axis=0)
-    # attn5 = np.concatenate(at5[:-1], axis=0)
     attnk = np.concatenate(atk[:-1], axis=0)
 
-    # return msg, attn1, attn2, attn3, attn4, attn5, attnk
+    # return msg, attn1, attn2, attn3, attnk
     return msg, attn1, attn2, attn3, attnk
 
 
 def main(argv):
-
     create_folder_tree(FLAGS.dataset)
 
     print("loading dataset ...")
     dl = DataLoader(dataset=FLAGS.dataset,
                     batch_size=FLAGS.batch_size)
 
-    if FLAGS.use_graph:
-        raise NotImplementedError("Graph version not implemented!")
-    else:
-        model = InterprecsysBase(
-            embedding_dim=FLAGS.embedding_size,
-            learning_rate=FLAGS.learning_rate,
-            field_size=dl.field_size,
-            feature_size=dl.feature_size,
-            batch_size=FLAGS.batch_size,
-            num_block=FLAGS.num_block,
-            attention_size=FLAGS.attention_size,
-            num_head=FLAGS.num_head,
-            dropout_rate=FLAGS.dropout_rate,
-            regularization_weight=FLAGS.regularization_weight,
-            random_seed=Constant.RANDOM_SEED,
-            scale_embedding=FLAGS.scale_embedding,
-            pool_filter_size=FLAGS.pool_filter_size,
-        )
+    model = InterprecsysBase(
+        embedding_dim=FLAGS.embedding_size,
+        learning_rate=FLAGS.learning_rate,
+        field_size=dl.field_size,
+        feature_size=dl.feature_size,
+        batch_size=FLAGS.batch_size,
+        num_block=FLAGS.num_block,
+        attention_size=FLAGS.attention_size,
+        num_head=FLAGS.num_head,
+        dropout_rate=FLAGS.dropout_rate,
+        regularization_weight=FLAGS.regularization_weight,
+        random_seed=Constant.RANDOM_SEED,
+        scale_embedding=FLAGS.scale_embedding,
+        pool_filter_size=FLAGS.pool_filter_size,
+    )
 
     # ===== Run everything =====
     run_model(data_loader=dl, 
               model=model, 
-              epochs=FLAGS.epoch, 
-              load_recent=FLAGS.load_recent)
+              epochs=FLAGS.epoch)
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from const import Constant
 from modules import multihead_attention, feedforward, embedding
-from module2 import recur_attention, agg_attention
+from module2 import agg_attention
 
 
 # ===== InterpRecSys Base Model =====
@@ -84,10 +84,7 @@ class InterprecsysBase:
             self.X_ind = tf.placeholder(dtype=tf.int32, 
                                         shape=[None, self.field_size], 
                                         name="X_index")
-            # self.X_val = tf.placeholder(dtype=tf.float32, 
-            #                             shape=[None, self.field_size], 
-            #                             name="X_value")
-            self.label = tf.placeholder(dtype=tf.float32, 
+            self.label = tf.placeholder(dtype=tf.float32,
                                         shape=[None],
                                         name="label")
             self.is_training = tf.placeholder(dtype=tf.bool, 
@@ -102,41 +99,8 @@ class InterprecsysBase:
                                  scale=self.scale_embedding,
                                  scope="embedding_process")
 
-            # multiply embeddings with values (for numeric features)
-            # self.emb = tf.multiply(self.emb,
-            #                       tf.expand_dims(self.X_val, axis=2))
-
         # self.emb: raw embedding, features: used for later
         features = self.emb
-
-        # apply dropout on embedding
-        # with tf.name_scope("dropout"):
-        #     features = tf.layers.dropout(features,
-        #                                  rate=self.dropout_rate,
-        #                                  training=self.is_training)
-
-        # multi-layer, multi-head attention, Version 1
-        # with tf.name_scope("Multilayer_attn"):
-        #     for i_block in range(self.num_block):
-        #         with tf.variable_scope("attn_head_{}".format(str(i_block))) as scope:
-        #             # multihead attention
-        #             features, _ = multihead_attention(queries=features,
-        #                                            keys=features,
-        #                                            num_units=self.embedding_dim,
-        #                                            num_heads=self.num_head,
-        #                                            dropout_rate=self.dropout_rate,
-        #                                            is_training=self.is_training,
-        #                                            scope="multihead_attn")
-        #
-        #             # feed forward
-        #             features = feedforward(inputs=features,
-        #                                    num_units=[4 * self.embedding_dim,
-        #                                               self.embedding_dim],
-        #                                    scope="feed_forward")  # (N, T, C)
-        # End of version 1
-
-        # | multi-layer, multi-head attention Version 2
-        # | major difference: remove multi-block
 
         with tf.name_scope("Multilayer_attn"):
             with tf.variable_scope("attention_head") as scope:
@@ -156,7 +120,6 @@ class InterprecsysBase:
                                self.embedding_dim],
                     scope="feed_forward"
                 )  # [N, T, dim]
-                
 
         # multi-head feature to agg 1st order feature
         with tf.name_scope("Agg_first_order") as scope:
@@ -172,7 +135,6 @@ class InterprecsysBase:
                 attention_size=self.attention_size,
                 regularize_scale=self.regularization_weight
                 )  # [N, dim]
-
 
         # build second order cross
         with tf.name_scope("Second_order") as scope:
@@ -220,57 +182,6 @@ class InterprecsysBase:
                 regularize_scale=self.regularization_weight
                 )
 
-        with tf.name_scope("Fourth_order") as scope:
-            feat_4 = tf.multiply(
-                features,
-                tf.expand_dims(agg_feat_3, axis=1)
-                )  # [N, T, dim]
-
-            feat_4 += feat_3  # Add the residual, [N, T, dim]
-
-            ctx_order_4 = tf.get_variable(
-                name="context_order_4",
-                shape=(self.attention_size),
-                dtype=tf.float32
-                )
-
-            agg_feat_4, self.attn_4 = agg_attention(
-                query=ctx_order_4,
-                keys=feat_4,
-                values=feat_4,
-                attention_size=self.attention_size,
-                regularize_scale=self.regularization_weight
-                )
-
-        with tf.name_scope("Fifth_order") as scope:
-            feat_5 = tf.multiply(
-                features,
-                tf.expand_dims(agg_feat_4, axis=1)
-                )  # [N, T, dim]
-
-            feat_4 += feat_3  # Add the residual, [N, T, dim]
-
-            ctx_order_5 = tf.get_variable(
-                name="context_order_5",
-                shape=(self.attention_size),
-                dtype=tf.float32
-                )
-
-            agg_feat_5, self.attn_5 = agg_attention(
-                query=ctx_order_5,
-                keys=feat_5,
-                values=feat_5,
-                attention_size=self.attention_size,
-                regularize_scale=self.regularization_weight
-                )
-
-
-        print("agg 1 shape", agg_feat_1.get_shape().as_list())
-        print("agg 2 shape", agg_feat_2.get_shape().as_list())
-        print("agg 3 shape", agg_feat_3.get_shape().as_list())
-        print("agg 4 shape", agg_feat_4.get_shape().as_list())
-        print("agg 5 shape", agg_feat_5.get_shape().as_list())
-
         with tf.name_scope("Merged_features"):
 
             # concatenate [enc, second_cross, third_cross]
@@ -279,12 +190,9 @@ class InterprecsysBase:
                 agg_feat_1,
                 agg_feat_2,
                 agg_feat_3,
-                # agg_feat_4,
-                # agg_feat_5
                 ],
                 axis=1, name="concat_feature")  # (N, k, C)
 
-        # Version 3
         # map C to pool_filter_size dimension
         mapped_all_feature = tf.layers.conv1d(
             inputs=all_features,
@@ -340,17 +248,12 @@ class InterprecsysBase:
             axis=[1]
         )  # (N,)
 
-        # Generate Logits here
-
         # sigmoid logits
         self.sigmoid_logits = tf.nn.sigmoid(logits)
 
         # regularization term
         self.regularization_loss = tf.losses.get_regularization_loss()
 
-        # sum logloss
-        # print("label shape", self.label.get_shape())
-        # print("logit shape", logits.shape)
         self.logloss = tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.expand_dims(self.label, -1),

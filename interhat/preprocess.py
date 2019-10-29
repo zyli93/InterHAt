@@ -439,8 +439,6 @@ if __name__ == "__main__":
         parse_criteo()
     elif dataset == "avazu":
         parse_avazu()
-    elif dataset == "safedriver":
-        parse_safe_driver()
     elif dataset == "ml":
         parse_ml()
     elif dataset == "frappe":

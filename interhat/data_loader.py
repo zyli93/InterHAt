@@ -7,14 +7,8 @@ NOTE: some code borrowed from here
 @Author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
 """
 
-import pickle
-
-from itertools import product
-import numpy as np
 import pandas as pd
 
-
-from build_entity_graph import load_graph, load_dict, load_nbr_dict
 from const import Constant, Config
 DATA_DIR = Constant.PARSE_DIR
 
@@ -99,7 +93,6 @@ class DataLoader:
             batch_label = self.test_label[bs * bi: end_index]
             yield batch_ind, batch_label
 
-    # TODO in later versions: combine test & val
     def generate_val_ivl(self):
         bs = self.batch_size
         batch_count = self.val_size // bs + 1
