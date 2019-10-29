@@ -1,0 +1,56 @@
+- dataset
+    - criteo: https://www.kaggle.com/c/avazu-ctr-prediction/data
+    - avazu: https://www.kaggle.com/c/criteo-display-ad-challenge/data
+    - MovieLens: http://files.grouplens.org/datasets/movielens/ml-20m-README.html
+
+**Please first run the baselines on criteo (criteoDAC)**
+**And then avazu and movielens**
+
+ - where are the datasets?
+    ssh to qilin
+    ssh to scai1 from qilin
+    run `$ cd /local2/zyli/InterpRecSys/data/raw`
+    there are three dirs
+
+- baseline repo
+    [Model] [Github]: <accomodate input for the model>
+    FM: LibFM
+- evaluation:
+    AUC, LogLoss (Cross Entropy)
+
+- cs account: 
+    chenyang@cs.ucla.edu
+
+- How to log in qilin and scai1
+    external -> qilin -> feilong
+                    -> scai1 (DGX-1)
+                    -> scai2 *
+
+    ssh chenyang@qilin.cs.ucla.edu
+    X ssh feilong
+    ssh scai1
+
+- Models and repos of the baseline models
+
+**If some of these repo don't work well, or raised Errors, feel free 
+to switch to other implementations**
+
+1. FM (Factorization Machine):
+LibFM: http://www.libfm.org/
+
+2. LR: Logistic Regression 
+The competitor used Sibyl (from google but not released)
+My suggestion is to try this:
+https://www.csie.ntu.edu.tw/~cjlin/liblinear/
+This is just a suggestion, you may have other solutions.
+If not, just skip LR for now.
+
+3. DCN: (Deep&Cross Network), 
+   xDeepFM: (Extremely Deep FM), 
+   Wide&xDeep
+   DeepFM
+https://github.com/shenweichen/DeepCTR
+
+4. PNN: Product-based Neural Networks for User Response Prediction
+https://github.com/Atomu2014/product-nets
+

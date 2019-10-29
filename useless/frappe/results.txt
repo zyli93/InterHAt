@@ -1,0 +1,6 @@
+PNN test LogLoss: 0.2177
+PNN test AUC: 0.9642
+FM test LogLoss: 0.448
+FM test AUC: 0.8247
+LR test LogLoss: 1.7558
+LR test AUC: 0.8625
